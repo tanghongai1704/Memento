@@ -1,97 +1,139 @@
-# Memento MVP User Flow
+# Memento — MVP User Flow
 
 ## 1. Overview
 
-This document defines the user flow and screen scope for the Memento MVP.
+Memento is a private social sharing application focused on sharing
+personal moments through photos and videos.
 
-The purpose of this document is to establish the core user experience before implementing the UI with Jetpack Compose.
+The core principle of Memento is:
 
-The MVP focuses on one core scenario:
+> Every Moment has a clearly defined audience.
 
-> Two connected users can authenticate, share photos/videos with each other in real time, and view previously shared moments.
+For the MVP, a Moment can only be shared with **one connected user**.
 
----
+A user cannot send the same Post to multiple individual users at once.
 
-# 2. MVP Scope
-
-The MVP includes the following core capabilities:
-
-* User registration
-* User login
-* User authentication state
-* Connect two users
-* Select photo/video
-* Preview selected media
-* Upload media
-* Receive media in realtime
-* View shared moments
-* View history
-* Basic loading state
-* Basic empty state
-* Basic error state
-
-The MVP prioritizes a complete working flow over advanced optimization.
+Future group sharing may be introduced through explicit Groups, where all
+members know who belongs to the Group. Group functionality is outside the
+scope of the MVP.
 
 ---
 
-# 3. Main User Flow
+# 2. MVP Product Principles
+
+## 2.1 Private by Default
+
+Every Post has a clearly defined audience.
+
+For the MVP:
 
 ```text
-                         ┌─────────────┐
-                         │     App     │
-                         └──────┬──────┘
-                                │
-                                ▼
-                         ┌─────────────┐
-                         │   Splash    │
-                         └──────┬──────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │ Authenticated ?  │
-                       └──────┬─────┬─────┘
-                              │     │
-                            Yes      No
-                              │     │
-                              │     ▼
-                              │  ┌─────────┐
-                              │  │  Login  │
-                              │  └────┬────┘
-                              │       │
-                              │       ├─────────────┐
-                              │       │             │
-                              │       ▼             ▼
-                              │  Login Success   Register
-                              │       │             │
-                              └───────┴─────────────┘
-                                      │
-                                      ▼
-                              ┌─────────────────┐
-                              │  1-to-1 Preview │
-                              └───────┬─────────┘
-                                      │
-                    ┌─────────────────┼─────────────────┐
-                    │                 │                 │
-                    ▼                 ▼                 ▼
-             Connect User        Send Media       View History
-                    │                 │                 │
-                    ▼                 ▼                 ▼
-             User Connection    Media Picker        History
-                                      │
-                                      ▼
-                                Media Preview
-                                      │
-                                      ▼
-                                    Send
-                                      │
-                                      ▼
-                               Upload Media
-                                      │
-                                      ▼
-                           Realtime Conversation
-                                      │
-                                      ▼
-                              Receiver sees media
+1 Post
+   ↓
+1 Connected User
+````
+
+The system does not support:
+
+```text
+1 Post
+   ↓
+User A
+User B
+User C
+```
+
+If multiple people need to receive a Moment in the future, they must belong
+to an explicitly created Group.
+
+---
+
+## 2.2 Connected Users Only
+
+A user can only send a Post to a person they are connected with.
+
+Therefore:
+
+```text
+Connection
+    ↓
+Connected User
+    ↓
+Can receive Moment
+```
+
+A user cannot directly send a Moment to an arbitrary user.
+
+---
+
+## 2.3 Transparent Audience
+
+The audience of a Post should always be understandable.
+
+From the sender's perspective:
+
+```text
+You → Alice
+```
+
+From the receiver's perspective:
+
+```text
+Alice → You
+```
+
+This reinforces the private nature of Memento.
+
+---
+
+# 3. Main MVP User Flow
+
+```text
+                    MEMENTO
+                       │
+                       ▼
+                    Splash
+                       │
+                       ▼
+                     Login
+                  /    │     \
+                 /     │      \
+                ▼      ▼       ▼
+            Signup   Forgot   Login
+                       Password   │
+                                  │
+                                  ▼
+                                Home
+                                  │
+             ┌────────────────────┼────────────────────┐
+             │                    │                    │
+             ▼                    ▼                    ▼
+           Filter             Connection           History
+             │
+             │
+             ▼
+       All / Specific User
+             │
+             ▼
+          Create Post
+             │
+             ▼
+      Select ONE User
+             │
+             ▼
+        Media Picker
+             │
+             ▼
+        Media Preview
+             │
+             ▼
+             Post
+             │
+             ▼
+            Home
+             │
+             ▼
+        Feed updated
 ```
 
 ---
@@ -100,252 +142,439 @@ The MVP prioritizes a complete working flow over advanced optimization.
 
 ## 4.1 Splash
 
-The application starts from the Splash screen.
+The application starts with:
 
-The application checks whether the user already has a valid authentication session.
+```text
+App Launch
+    ↓
+Splash
+```
+
+The Splash Screen is responsible only for the initial application entry
+experience.
+
+After Splash:
 
 ```text
 Splash
-  │
-  ├── Authenticated
-  │       ↓
-  │   1-to-1 Preview
-  │
-  └── Not Authenticated
-          ↓
-        Login
+   ↓
+Login
 ```
 
-### Responsibilities
-
-* Check authentication state
-* Prevent displaying the wrong initial screen
-* Redirect the user to the appropriate destination
-
-### States
-
-* Loading
-* Authenticated
-* Unauthenticated
+Authentication persistence can be implemented later with Firebase
+Authentication.
 
 ---
 
 # 5. Login Flow
 
+## 5.1 Login Screen
+
+The Login Screen contains:
+
+* Login title
+* Account field
+* Password field
+* Login button
+* Forgot Password
+* Sign Up navigation
+
+Conceptually:
+
 ```text
-Login
- │
- ├── Login Success
- │       ↓
- │   1-to-1 Preview
- │
- ├── Invalid Credentials
- │       ↓
- │   Error Message
- │
- └── Network Error
-         ↓
-       Error State
+┌──────────────────────────────┐
+│                              │
+│           Memento            │
+│                              │
+│            Login             │
+│                              │
+│  Account                     │
+│  [ email / phone          ]  │
+│                              │
+│  Password                    │
+│  [ ***********            ]  │
+│                              │
+│         [ Login ]            │
+│                              │
+│       Forgot password?       │
+│                              │
+│   Don't have an account?     │
+│          Sign up             │
+│                              │
+└──────────────────────────────┘
 ```
 
-### User Actions
-
-* Enter email
-* Enter password
-* Press Login
-* Navigate to Register
-
 ### Success
-
-After successful authentication:
 
 ```text
 Login
   ↓
-1-to-1 Preview
+Home
 ```
 
 ### Error
 
-For an invalid login:
+Examples:
+
+```text
+Invalid account
+Invalid password
+Network error
+```
+
+For the initial MVP UI implementation, authentication can use mock data.
+
+Real Firebase Authentication will be implemented in a later task.
+
+---
+
+# 6. Signup Flow
+
+## 6.1 Signup Screen
+
+The Signup Screen contains:
+
+* Username
+* Email / Phone
+* Password
+* Confirm Password
+* Sign Up button
+* Back/Login navigation
+
+Conceptually:
+
+```text
+┌──────────────────────────────┐
+│           Sign Up            │
+│                              │
+│  Username                    │
+│  [                      ]    │
+│                              │
+│  Email / Phone               │
+│  [                      ]    │
+│                              │
+│  Password                    │
+│  [                      ]    │
+│                              │
+│  Confirm Password            │
+│  [                      ]    │
+│                              │
+│         [ Sign Up ]          │
+│                              │
+│       Already have account?  │
+│             Login            │
+└──────────────────────────────┘
+```
+
+Basic validation:
+
+* Required fields must not be empty.
+* Password and Confirm Password must match.
+
+### Success
+
+```text
+Signup
+   ↓
+Home
+```
+
+Real account creation will be implemented with Firebase Authentication
+later.
+
+---
+
+# 7. Forgot Password Flow
+
+Forgot Password is part of the MVP navigation but does not require
+functional password recovery yet.
+
+Flow:
 
 ```text
 Login
   ↓
-Error
-  ↓
-User corrects input
+Forgot Password
 ```
+
+Initial screen:
+
+```text
+Forgot Password
+
+Coming soon...
+```
+
+Actual password reset functionality will be implemented later.
 
 ---
 
-# 6. Register Flow
+# 8. Home Flow
+
+Home is the central screen of Memento.
+
+The Home Screen contains:
+
+1. Feed filter
+2. Chronological feed
+3. Create Post button
+
+---
+
+## 8.1 Feed
+
+Posts are displayed from:
 
 ```text
-Register
-   │
-   ├── Registration Success
-   │          ↓
-   │      1-to-1 Preview
-   │
-   ├── Invalid Input
-   │          ↓
-   │      Validation Error
-   │
-   └── Registration Failed
-              ↓
-          Error State
-```
-
-### User Actions
-
-* Enter registration information
-* Submit registration
-* Return to Login
-
-### Success
-
-A successfully registered user is authenticated and redirected to:
-
-```text
-Register
+Newest
    ↓
-1-to-1 Preview
+Older
+```
+
+The feed should use a scrollable list.
+
+Example:
+
+```text
+┌──────────────────────────────┐
+│ Memento                      │
+│                              │
+│ [ All ] [ Alice ] [ Bob ]    │
+├──────────────────────────────┤
+│                              │
+│ You → Alice                  │
+│ 10:32 AM                     │
+│                              │
+│       [ Image ]              │
+│                              │
+├──────────────────────────────┤
+│ Alice → You                  │
+│ 09:41 AM                     │
+│                              │
+│       [ Video ]              │
+│                              │
+├──────────────────────────────┤
+│ You → Bob                    │
+│ 08:20 AM                     │
+│                              │
+│       [ Image ]              │
+│                              │
+└──────────────────────────────┘
+
+                         [ + ]
+```
+
+Unlike Locket, a single Post does not occupy the entire screen.
+
+Multiple Posts can be visible in the feed.
+
+---
+
+# 9. Feed Filter
+
+The Home Screen provides a filter for viewing different private
+timelines.
+
+Default:
+
+```text
+[ All ]
+```
+
+Available connected users:
+
+```text
+[ All ] [ Alice ] [ Bob ] [ Charlie ]
 ```
 
 ---
 
-# 7. 1-to-1 Preview
+## 9.1 All Filter
 
-The 1-to-1 Preview is the main screen of the MVP.
-
-It represents the user's current sharing relationship with another user.
-
-### Main Actions
+When:
 
 ```text
-1-to-1 Preview
- │
- ├── Connect User
- │
- ├── Send Media
- │
- └── View History
+Filter = All
 ```
 
-### Responsibilities
+the feed displays all Moments that the current user is allowed to see.
 
-* Display connected user
-* Display recent shared moment/media
-* Allow the user to connect another user
-* Start media sharing
-* Navigate to history
-
----
-
-# 8. User Connection Flow
+Example:
 
 ```text
-1-to-1 Preview
-       ↓
-Connect User
-       ↓
-User Connection
-       ↓
-Search User
-       ↓
-User Found?
-   ┌───┴────┐
-   │        │
-  No       Yes
-   │        │
-   ▼        ▼
- Empty    User
- State    Found
-            │
-            ▼
-         Connect
-            │
-            ▼
-        Connected
-            │
-            ▼
-      1-to-1 Preview
+You → Alice
+Alice → You
+
+You → Bob
+Bob → You
+
+You → Charlie
+Charlie → You
 ```
 
-## Empty State
-
-If no user matches the search:
+Posts remain sorted:
 
 ```text
-User Connection
-       ↓
-No User Found
-       ↓
-"No users found"
-```
-
-## Error State
-
-If the request fails:
-
-```text
-User Connection
-       ↓
-Error
-       ↓
-"Unable to connect"
-       ↓
-Retry
+Newest → Oldest
 ```
 
 ---
 
-# 9. Media Sharing Flow
+## 9.2 User Filter
 
-The media sharing flow is one of the most important MVP flows.
+When:
 
 ```text
-1-to-1 Preview
-       ↓
-   Send Media
-       ↓
-Android Photo Picker
-       ↓
-Select Photo / Video
-       ↓
+Filter = Alice
+```
+
+the feed represents the private 1-to-1 timeline between the current user
+and Alice.
+
+It should contain:
+
+```text
+You → Alice
+Alice → You
+```
+
+It should NOT mean:
+
+```text
+Only posts authored by Alice
+```
+
+The filter represents a private relationship/timeline.
+
+---
+
+# 10. Create Post Flow
+
+The user can create a Post using a persistent Create Post button,
+represented by a Floating Action Button:
+
+```text
+[ + ]
+```
+
+The button is available from the Home feed.
+
+Flow:
+
+```text
+Home
+  ↓
+Create Post
+  ↓
+Select Recipient
+  ↓
+Media Picker
+  ↓
 Media Preview
-       ↓
-      Send
-       ↓
-  Upload Media
-       ↓
-Realtime Conversation
+  ↓
+Post
+  ↓
+Home
 ```
 
 ---
 
-# 10. Media Picker
+# 11. Selecting the Recipient
 
-The MVP uses the Android system Photo Picker.
+The recipient selection behavior depends on the current Home filter.
 
-Memento does not implement a custom gallery/media browser in the initial MVP.
+---
+
+## 11.1 When Filter = All
+
+No recipient is selected initially.
+
+The user must select exactly one connected user.
+
+Example:
 
 ```text
-1-to-1 Preview
-       ↓
-   Send Media
-       ↓
-Android Photo Picker
-       ↓
-Photo / Video Selected
+Create Moment
+
+Share with:
+
+○ Alice
+○ Bob
+○ Charlie
 ```
 
-The system picker allows the user to select supported media and returns the selected media URI to the application.
+Only one user can be selected.
+
+The UI must NOT allow:
+
+```text
+☑ Alice
+☑ Bob
+☑ Charlie
+```
 
 ---
 
-# 11. Media Preview
+## 11.2 When Filter = Specific User
+
+For example:
+
+```text
+Filter = Alice
+```
+
+When the user presses Create Post:
+
+```text
+Create Moment
+
+Share with:
+Alice
+
+[ Change recipient ]
+```
+
+Alice is selected by default.
+
+The user can still change the recipient.
+
+---
+
+# 12. Media Picker Flow
+
+After selecting the recipient:
+
+```text
+Select Recipient
+       ↓
+Media Picker
+```
+
+The MVP supports the concept of:
+
+* Photo
+* Video
+* Multiple photos
+
+The actual media processing pipeline is outside the initial UI MVP.
+
+Future processing includes:
+
+```text
+Media
+  ↓
+Resize
+  ↓
+Compress
+  ↓
+Thumbnail
+  ↓
+Upload
+```
+
+---
+
+# 13. Media Preview Flow
 
 After selecting media:
 
@@ -355,415 +584,495 @@ Media Picker
 Media Preview
 ```
 
-The user can:
+The Preview Screen displays:
 
-```text
-Media Preview
- │
- ├── Cancel
- │      ↓
- │   1-to-1 Preview
- │
- └── Send
-       ↓
-   Upload Media
-```
-
-### Responsibilities
-
-* Display selected photo/video
-* Allow the user to confirm the media
-* Allow the user to cancel
-* Prepare media for upload
-
----
-
-# 12. Media Upload Flow
-
-```text
-Media Preview
-      ↓
-     Send
-      ↓
-   Uploading
-      │
-      ├── Success
-      │      ↓
-      │ Realtime Conversation
-      │
-      └── Failure
-             ↓
-          Error State
-             │
-             ├── Retry
-             │
-             └── Cancel
-```
-
-## Uploading State
-
-The UI should communicate that the media is currently being uploaded.
+* Selected media
+* Selected recipient
+* Back/Edit action
+* Post action
 
 Example:
 
 ```text
-Uploading...
+┌──────────────────────────────┐
+│         Preview              │
+│                              │
+│       [ Media ]              │
+│                              │
+│  Share with: Alice           │
+│                              │
+│   [ Edit ]      [ Post ]     │
+└──────────────────────────────┘
 ```
 
-The MVP does not require advanced upload optimization or automatic retry.
+The user must be able to review the Moment before posting.
 
 ---
 
-# 13. Realtime Conversation
+# 14. Posting Flow
 
-The Realtime Conversation represents the shared media stream between the two connected users.
-
-```text
-User A
-  │
-  │ Send Media
-  ▼
-Firebase
-  │
-  │ Realtime Update
-  ▼
-User B
-  │
-  ▼
-Conversation
-```
-
-### Responsibilities
-
-* Display sent media
-* Display received media
-* Receive new media updates
-* Display upload/loading states
-* Display media loading errors
-
-### Basic States
+When the user presses Post:
 
 ```text
-Loading
-Content
-Empty
-Error
-```
-
----
-
-# 14. Receiving Media
-
-When another user sends media:
-
-```text
-Firebase
-   ↓
-Realtime Update
-   ↓
-Conversation
-   ↓
-New Media Appears
-```
-
-The receiver should not need to manually refresh the screen.
-
-The MVP relies on Firebase realtime updates to update the UI.
-
----
-
-# 15. History Flow
-
-```text
-1-to-1 Preview
+Media Preview
       ↓
-  View History
+     Post
       ↓
-    History
-      │
-      ├── Has Media
-      │      ↓
-      │   Media List
-      │
-      └── No Media
-             ↓
-         Empty State
+   Uploading
+      ↓
+    Success
+      ↓
+     Home
 ```
 
-### Responsibilities
+For the initial UI MVP, the upload can be simulated.
 
-* Display previously shared moments
-* Display photos/videos
-* Allow the user to review previous media
+Later:
+
+```text
+Post
+ ↓
+Resize / Compress
+ ↓
+Firebase Storage
+ ↓
+Save metadata to Firestore
+ ↓
+Realtime listener
+ ↓
+Feed updated
+```
 
 ---
 
-# 16. History States
+# 15. Post Model Concept
+
+For MVP, every Post has one audience.
+
+Conceptually:
+
+```text
+Post
+├── id
+├── authorId
+├── audienceType
+├── audienceId
+├── media
+└── createdAt
+```
+
+For MVP:
+
+```text
+audienceType = USER
+```
+
+and:
+
+```text
+audienceId = connectedUserId
+```
+
+Example:
+
+```text
+Post
+authorId = userA
+audienceType = USER
+audienceId = userB
+```
+
+This means:
+
+```text
+User A → User B
+```
+
+---
+
+# 16. Future Group Extension
+
+Groups are NOT part of the MVP.
+
+Future flow:
+
+```text
+Create Group
+      ↓
+Select Members
+      ↓
+Group Created
+      ↓
+All members know the members
+      ↓
+Create Post
+      ↓
+Select Group
+      ↓
+Post → Group
+```
+
+The future model can support:
+
+```text
+audienceType
+
+USER
+GROUP
+```
+
+Therefore the MVP should avoid designing the Post model in a way that
+only supports multiple recipients.
+
+The MVP only implements:
+
+```text
+USER
+```
+
+---
+
+# 17. Connection Flow
+
+Connection is required before a user can send a Moment to another user.
+
+Basic MVP flow:
+
+```text
+Home
+  ↓
+Connection
+  ↓
+Connected Users
+```
+
+Example:
+
+```text
+My Connections
+
+Alice
+Bob
+Charlie
+```
+
+These users are available as recipients when creating a Post.
+
+The initial UI MVP does not need to implement the complete connection
+request/accept system.
+
+Real connection management can be implemented later.
+
+---
+
+# 18. History Flow
+
+The user can navigate to History from Home.
+
+```text
+Home
+  ↓
+History
+```
+
+History displays previously available Moments.
+
+Sorting:
+
+```text
+Newest
+   ↓
+Older
+```
+
+Future versions may group history by:
+
+```text
+Today
+Yesterday
+This Week
+Older
+```
+
+Offline history using Room is outside the initial UI MVP.
+
+---
+
+# 19. Basic UI States
+
+Each screen should be designed with basic states where appropriate.
 
 ## Loading
 
 ```text
-History
-   ↓
 Loading
-```
-
-The application is retrieving history data.
-
-## Empty
-
-```text
-History
    ↓
-No moments yet
-```
-
-Example message:
-
-```text
-No moments yet.
-Start sharing something with your connection.
+Display progress indicator
 ```
 
 ## Content
 
 ```text
-History
+Content
    ↓
-Media List
+Display normal UI
+```
+
+## Empty
+
+Example:
+
+```text
+No Moments yet.
+
+Start sharing a moment with someone.
 ```
 
 ## Error
 
+Example:
+
 ```text
-History
-   ↓
-Unable to load history
-   ↓
-Retry
+Something went wrong.
+
+[ Retry ]
+```
+
+The initial MVP can simulate these states.
+
+Real error handling and retry mechanisms will be implemented later.
+
+---
+
+# 20. Home UI State
+
+Conceptually:
+
+```text
+HomeUiState
+├── posts
+├── connections
+├── selectedFilter
+├── isLoading
+└── errorMessage
+```
+
+Filter:
+
+```text
+FeedFilter
+├── All
+└── User(userId)
+```
+
+Future:
+
+```text
+FeedFilter
+├── All
+├── User(userId)
+└── Group(groupId)
+```
+
+Group is not implemented in MVP.
+
+---
+
+# 21. Create Post UI State
+
+Conceptually:
+
+```text
+CreatePostUiState
+├── selectedRecipient
+├── selectedMedia
+├── isUploading
+├── uploadProgress
+└── errorMessage
+```
+
+Important rule:
+
+```text
+selectedRecipient
+```
+
+must represent exactly one User in MVP.
+
+---
+
+# 22. Authentication UI States
+
+## Login
+
+```text
+LoginUiState
+├── account
+├── password
+├── isLoading
+└── errorMessage
+```
+
+## Signup
+
+```text
+SignupUiState
+├── username
+├── account
+├── password
+├── confirmPassword
+├── isLoading
+└── errorMessage
 ```
 
 ---
 
-# 17. Screen List
-
-The MVP contains the following application screens:
-
-| Screen                | MVP | Purpose                             |
-| --------------------- | --: | ----------------------------------- |
-| Splash                | Yes | Check authentication state          |
-| Login                 | Yes | Authenticate existing user          |
-| Register              | Yes | Create a new user                   |
-| 1-to-1 Preview        | Yes | Main screen and sharing entry point |
-| User Connection       | Yes | Search and connect users            |
-| Media Preview         | Yes | Preview selected media              |
-| Realtime Conversation | Yes | Display sent/received media         |
-| History               | Yes | View previously shared moments      |
-| Profile / Settings    |  No | Post-MVP                            |
-
-### System UI
-
-The Media Picker is not implemented as a Memento screen.
-
-The MVP uses:
-
-```text
-Android System Photo Picker
-```
-
-for selecting photos and videos.
-
----
-
-# 18. Navigation Map
+# 23. MVP Navigation Map
 
 ```text
 Splash
- │
- ├── Login
- │    └── Register
- │          │
- │          └──────────────┐
- │                         │
- └─────────────────────────┤
-                           ▼
-                    1-to-1 Preview
-                      │    │    │
-                      │    │    └──────→ History
-                      │    │
-                      │    └───────────→ Media Picker
-                      │                      │
-                      │                      ▼
-                      │                Media Preview
-                      │                      │
-                      │                      ▼
-                      │               Conversation
-                      │
-                      └──────────────→ User Connection
-                                             │
-                                             ▼
-                                      1-to-1 Preview
-```
-
----
-
-# 19. UI State Model
-
-The MVP follows a basic state-driven UI model.
-
-Major data-driven screens should consider:
-
-```text
-┌─────────┐
-│ Loading │
-└────┬────┘
-     │
-     ├───────────────┐
-     ▼               ▼
-┌─────────┐     ┌─────────┐
-│ Content │     │  Empty  │
-└─────────┘     └─────────┘
-     │
-     │ Error
-     ▼
-┌─────────┐
-│  Error  │
-└─────────┘
-```
-
-The exact states will be implemented through Compose UI state and ViewModel state.
-
----
-
-# 20. Basic Error Scenarios
-
-The MVP should handle the following basic scenarios.
-
-| Scenario              | Expected UI                |
-| --------------------- | -------------------------- |
-| Invalid login         | Error message              |
-| Invalid registration  | Validation error           |
-| User not found        | Empty state                |
-| Connection failure    | Error + retry              |
-| Media upload failure  | Error + retry              |
-| Media loading failure | Error placeholder          |
-| Empty history         | Empty state                |
-| Network unavailable   | Error / offline indication |
-
-Advanced automatic retry and offline synchronization are outside the initial MVP scope.
-
----
-
-# 21. MVP Out of Scope
-
-The following features are intentionally excluded from the initial MVP implementation.
-
-### Advanced Performance
-
-* FPS profiling
-* Memory profiling
-* Advanced image decoding optimization
-* Advanced preload strategy
-* Scroll-based request cancellation
-
-### Advanced Caching
-
-* Two-level memory + disk cache
-* Custom LRU cache management
-* Advanced cache eviction strategy
-
-### Advanced Error Handling
-
-* Automatic retry
-* Network-aware retry queue
-* Complex upload recovery
-
-### Advanced Media Processing
-
-* Color filters
-* TensorFlow Lite
-* Selfie segmentation
-* Face Landmarker
-* Background removal
-* Skin smoothing
-* Automatic lighting correction
-
-### Other
-
-* Profile
-* Settings
-* Notifications
-* Group sharing
-* Advanced social features
-
-These features may be added after the MVP is stable.
-
----
-
-# 22. MVP Success Criteria
-
-The MVP is considered functionally complete when the following end-to-end flow works:
-
-```text
-User A
-  ↓
-Register
   ↓
 Login
+  ├── Signup
+  │     ↓
+  │    Home
+  │
+  └── Forgot Password
+        ↓
+      Login
+
+Login success
   ↓
-Connect User B
-  ↓
-Open 1-to-1 Preview
-  ↓
-Select Photo / Video
-  ↓
-Preview Media
-  ↓
-Send
-  ↓
-Upload
-  ↓
-Firebase
-  ↓
-Realtime Update
-  ↓
-User B receives media
-  ↓
-User B sees media
-  ↓
-Media appears in History
+Home
+  ├── Connection
+  │
+  ├── History
+  │
+  └── Create Post
+        │
+        ▼
+   Select User
+        │
+        ▼
+   Media Picker
+        │
+        ▼
+   Media Preview
+        │
+        ▼
+       Post
+        │
+        ▼
+       Home
 ```
-
-The MVP should also support:
-
-```text
-Login Error
-Upload Error
-Empty History
-User Not Found
-Basic Network Error
-```
-
-without crashing the application.
 
 ---
 
-# 23. Implementation Principle
+# 24. MVP Scope
 
-The MVP prioritizes:
+## Included
 
-1. Correct functionality
-2. Complete end-to-end flow
-3. Clear architecture
-4. Basic error handling
-5. Maintainable code
+* Splash
+* Login UI
+* Signup UI
+* Forgot Password placeholder
+* Home feed
+* Chronological feed
+* All filter
+* User filter
+* Connection screen
+* Create Post
+* Select one connected user
+* Media Picker UI
+* Media Preview UI
+* History UI
+* Basic Loading state
+* Basic Empty state
+* Basic Error state
+* Mock/fake data
+* Basic navigation
 
-Advanced optimization will be implemented after the core flow is stable.
+---
 
-The goal is to first answer:
+# 25. Not Included in Initial UI MVP
 
-> "Can two users reliably share and view moments?"
+The following are intentionally postponed:
 
-Once this works, the project will move toward:
+* Firebase Authentication
+* Firestore
+* Firebase Storage
+* Realtime synchronization
+* Room
+* Offline-first architecture
+* Memory Cache
+* Disk Cache
+* Image compression
+* Image resizing
+* Video compression
+* Thumbnail generation
+* Advanced retry
+* Network monitoring
+* Media preload
+* Performance profiling
+* TensorFlow Lite
+* Face detection
+* Background removal
+* Skin smoothing
+* Automatic lighting adjustment
+* Filters
+* Groups
+* Multiple individual recipients
+* Push notifications
 
-> "Can the experience be made faster, smoother, more reliable, and more intelligent?"
+These features will be implemented in later stages.
+
+---
+
+# 26. MVP Success Criteria
+
+The UI MVP is considered complete when a user can conceptually perform:
+
+```text
+Open App
+   ↓
+Login / Signup
+   ↓
+Home
+   ↓
+View Feed
+   ↓
+Filter All / User
+   ↓
+Create Post
+   ↓
+Select ONE Connected User
+   ↓
+Select Media
+   ↓
+Preview Media
+   ↓
+Post
+   ↓
+Return to Home
+```
+
+The application should also allow navigation to:
+
+```text
+Connection
+History
+Forgot Password
+```
+
+without crashes.
+
+The implementation does not need real backend functionality yet.
+
+The goal of this MVP stage is to validate:
+
+1. Screen structure.
+2. Navigation.
+3. UI state management.
+4. Core user flow.
+5. Private 1-to-1 sharing concept.
+6. Future extensibility toward Groups and real-time backend.

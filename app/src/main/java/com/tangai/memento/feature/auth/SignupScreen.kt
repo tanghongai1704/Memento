@@ -21,14 +21,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tangai.memento.feature.auth.login.LoginViewModel
+import com.tangai.memento.feature.auth.signup.SignupViewModel
 
 @Composable
-fun LoginScreen(
+fun SignupScreen(
     onNavigateToHome: () -> Unit,
-    onNavigateToSignup: () -> Unit,
-    onNavigateToForgotPassword: () -> Unit,
-    viewModel: LoginViewModel = viewModel()
+    onNavigateToLogin: () -> Unit,
+    viewModel: SignupViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -51,9 +50,17 @@ fun LoginScreen(
             )
 
             Text(
-                text = "Login",
+                text = "Sign Up",
                 fontSize = 32.sp,
                 modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            OutlinedTextField(
+                value = uiState.username,
+                onValueChange = { viewModel.onUsernameChanged(it) },
+                label = { Text("Username") },
+                modifier = Modifier.padding(8.dp),
+                enabled = !uiState.isLoading
             )
 
             OutlinedTextField(
@@ -77,6 +84,19 @@ fun LoginScreen(
                 enabled = !uiState.isLoading
             )
 
+            OutlinedTextField(
+                value = uiState.confirmPassword,
+                onValueChange = { viewModel.onConfirmPasswordChanged(it) },
+                label = { Text("Confirm Password") },
+                modifier = Modifier.padding(8.dp),
+                visualTransformation = if (uiState.isConfirmPasswordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                enabled = !uiState.isLoading
+            )
+
             uiState.errorMessage?.let {
                 Text(
                     text = it,
@@ -92,29 +112,20 @@ fun LoginScreen(
                 CircularProgressIndicator()
             } else {
                 Button(
-                    onClick = { viewModel.onLoginClick(onNavigateToHome) },
+                    onClick = { viewModel.onSignupClick(onNavigateToHome) },
                     modifier = Modifier.padding(8.dp)
                 ) {
-                    Text("Login")
+                    Text("Sign Up")
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             TextButton(
-                onClick = onNavigateToForgotPassword,
+                onClick = onNavigateToLogin,
                 enabled = !uiState.isLoading
             ) {
-                Text("Forgot password?")
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            TextButton(
-                onClick = onNavigateToSignup,
-                enabled = !uiState.isLoading
-            ) {
-                Text("Don't have an account? Sign up")
+                Text("Already have an account? Login")
             }
         }
     }
