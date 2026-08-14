@@ -7,6 +7,7 @@ import com.tangai.memento.data.model.Post
 import com.tangai.memento.data.model.AudienceType
 import com.tangai.memento.data.model.MediaType
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,10 +46,10 @@ class CreatePostViewModel : ViewModel() {
 
             for (i in 0..100 step 20) {
                 _uiState.value = _uiState.value.copy(uploadProgress = i / 100f)
-                delay(100)
+                delay(100.milliseconds)
             }
 
-            delay(500)
+            delay(500.milliseconds)
 
             // Create a fake Post object
             val newPost = Post(

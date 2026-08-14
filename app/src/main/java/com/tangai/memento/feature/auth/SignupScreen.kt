@@ -27,9 +27,9 @@ import com.tangai.memento.feature.auth.signup.SignupViewModel
 fun SignupScreen(
     onNavigateToHome: () -> Unit,
     onNavigateToLogin: () -> Unit,
-    viewModel: SignupViewModel = viewModel()
+    signupViewModel: SignupViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by signupViewModel.uiState.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -57,7 +57,7 @@ fun SignupScreen(
 
             OutlinedTextField(
                 value = uiState.username,
-                onValueChange = { viewModel.onUsernameChanged(it) },
+                onValueChange = { signupViewModel.onUsernameChanged(it) },
                 label = { Text("Username") },
                 modifier = Modifier.padding(8.dp),
                 enabled = !uiState.isLoading
@@ -65,7 +65,7 @@ fun SignupScreen(
 
             OutlinedTextField(
                 value = uiState.account,
-                onValueChange = { viewModel.onAccountChanged(it) },
+                onValueChange = { signupViewModel.onAccountChanged(it) },
                 label = { Text("Email / Phone") },
                 modifier = Modifier.padding(8.dp),
                 enabled = !uiState.isLoading
@@ -73,7 +73,7 @@ fun SignupScreen(
 
             OutlinedTextField(
                 value = uiState.password,
-                onValueChange = { viewModel.onPasswordChanged(it) },
+                onValueChange = { signupViewModel.onPasswordChanged(it) },
                 label = { Text("Password") },
                 modifier = Modifier.padding(8.dp),
                 visualTransformation = if (uiState.isPasswordVisible) {
@@ -86,7 +86,7 @@ fun SignupScreen(
 
             OutlinedTextField(
                 value = uiState.confirmPassword,
-                onValueChange = { viewModel.onConfirmPasswordChanged(it) },
+                onValueChange = { signupViewModel.onConfirmPasswordChanged(it) },
                 label = { Text("Confirm Password") },
                 modifier = Modifier.padding(8.dp),
                 visualTransformation = if (uiState.isConfirmPasswordVisible) {
@@ -112,7 +112,7 @@ fun SignupScreen(
                 CircularProgressIndicator()
             } else {
                 Button(
-                    onClick = { viewModel.onSignupClick(onNavigateToHome) },
+                        onClick = { signupViewModel.onSignupClick(onNavigateToHome) },
                     modifier = Modifier.padding(8.dp)
                 ) {
                     Text("Sign Up")

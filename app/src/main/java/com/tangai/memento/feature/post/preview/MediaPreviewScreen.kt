@@ -26,10 +26,10 @@ import com.tangai.memento.feature.home.HomeViewModel
 fun MediaPreviewScreen(
     onNavigateBack: () -> Unit,
     onNavigateToHome: () -> Unit,
-    viewModel: CreatePostViewModel = viewModel(),
+    createPostViewModel: CreatePostViewModel = viewModel(),
     homeViewModel: HomeViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by createPostViewModel.uiState.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -79,8 +79,8 @@ fun MediaPreviewScreen(
             } else {
                 Button(
                 onClick = {
-                    viewModel.simulatePostCreation { newPost ->
-                        // Add the post to HomeViewModel and navigate home
+                    createPostViewModel.simulatePostCreation { newPost ->
+                        // Add the post to homeViewModel and navigate home
                         homeViewModel.addPost(newPost)
                         onNavigateToHome()
                     }

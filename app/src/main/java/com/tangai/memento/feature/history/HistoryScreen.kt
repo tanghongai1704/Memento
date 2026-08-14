@@ -26,12 +26,12 @@ import com.tangai.memento.core.common.ui.UiState
 @Composable
 fun HistoryScreen(
     onNavigateBack: () -> Unit,
-    viewModel: HistoryViewModel = viewModel()
+    HistoryViewModel: HistoryViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by HistoryViewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        viewModel.loadHistory()
+        HistoryViewModel.loadHistory()
     }
 
     Box(

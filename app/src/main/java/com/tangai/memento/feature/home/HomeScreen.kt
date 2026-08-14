@@ -36,9 +36,9 @@ fun HomeScreen(
     onNavigateToConnection: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToCreatePost: () -> Unit,
-    viewModel: HomeViewModel = viewModel()
+    homeViewModel: HomeViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -86,7 +86,7 @@ fun HomeScreen(
                     FilterChip(
                         label = "All",
                         selected = uiState.selectedFilter is FeedFilter.All,
-                        onClick = { viewModel.onFilterSelected(FeedFilter.All) }
+                        onClick = { homeViewModel.onFilterSelected(FeedFilter.All) }
                     )
                 }
 
@@ -96,7 +96,7 @@ fun HomeScreen(
                         label = connection.username,
                         selected = (uiState.selectedFilter is FeedFilter.User &&
                                 (uiState.selectedFilter as FeedFilter.User).userId == connection.id),
-                        onClick = { viewModel.onFilterSelected(FeedFilter.User(connection.id)) }
+                        onClick = { homeViewModel.onFilterSelected(FeedFilter.User(connection.id)) }
                     )
                 }
             }
@@ -111,7 +111,7 @@ fun HomeScreen(
                 ) {
                     CircularProgressIndicator()
                 }
-            } else if (viewModel.getFilteredPosts().isEmpty()) {
+            } else if (homeViewModel.getFilteredPosts().isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -126,10 +126,10 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
-                    items(viewModel.getFilteredPosts()) { post ->
+                    items(homeViewModel.getFilteredPosts()) { post ->
                         PostCard(
                             post = post,
-                            postLabel = viewModel.getPostLabel(post)
+                            postLabel = homeViewModel.getPostLabel(post)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }

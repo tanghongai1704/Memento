@@ -28,9 +28,9 @@ fun LoginScreen(
     onNavigateToHome: () -> Unit,
     onNavigateToSignup: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
-    viewModel: LoginViewModel = viewModel()
+    loginViewModel: LoginViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by loginViewModel.uiState.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -58,7 +58,7 @@ fun LoginScreen(
 
             OutlinedTextField(
                 value = uiState.account,
-                onValueChange = { viewModel.onAccountChanged(it) },
+                onValueChange = { loginViewModel.onAccountChanged(it) },
                 label = { Text("Email / Phone") },
                 modifier = Modifier.padding(8.dp),
                 enabled = !uiState.isLoading
@@ -66,7 +66,7 @@ fun LoginScreen(
 
             OutlinedTextField(
                 value = uiState.password,
-                onValueChange = { viewModel.onPasswordChanged(it) },
+                onValueChange = { loginViewModel.onPasswordChanged(it) },
                 label = { Text("Password") },
                 modifier = Modifier.padding(8.dp),
                 visualTransformation = if (uiState.isPasswordVisible) {
@@ -92,7 +92,7 @@ fun LoginScreen(
                 CircularProgressIndicator()
             } else {
                 Button(
-                    onClick = { viewModel.onLoginClick(onNavigateToHome) },
+                    onClick = { loginViewModel.onLoginClick(onNavigateToHome) },
                     modifier = Modifier.padding(8.dp)
                 ) {
                     Text("Login")
