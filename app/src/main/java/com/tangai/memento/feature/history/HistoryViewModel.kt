@@ -2,7 +2,7 @@ package com.tangai.memento.feature.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tangai.memento.core.common.UiState
+import com.tangai.memento.core.common.ui.UiState
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.flow.MutableStateFlow

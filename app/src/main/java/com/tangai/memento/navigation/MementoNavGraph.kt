@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.tangai.memento.ui.theme.MementoTheme
+import com.tangai.memento.core.common.theme.MementoTheme
 import com.tangai.memento.feature.auth.SplashScreen
 import com.tangai.memento.feature.auth.LoginScreen
 import com.tangai.memento.feature.auth.SignupScreen

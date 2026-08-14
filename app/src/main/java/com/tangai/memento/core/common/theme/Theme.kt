@@ -1,6 +1,5 @@
-package com.tangai.memento.ui.theme
+package com.tangai.memento.core.common.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme

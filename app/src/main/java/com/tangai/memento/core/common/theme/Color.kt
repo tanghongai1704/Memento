@@ -1,4 +1,4 @@
-package com.tangai.memento.ui.theme
+package com.tangai.memento.core.common.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -1,4 +1,4 @@
-package com.tangai.memento.core.common
+package com.tangai.memento.core.common.ui
 
 sealed interface UiState<T> {
     data class Loading<T>(val value: Unit = Unit) : UiState<T>
