@@ -1,20 +1,20 @@
 package com.tangai.memento.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.rememberNavController
 import com.tangai.memento.core.common.theme.MementoTheme
-import com.tangai.memento.feature.auth.SplashScreen
-import com.tangai.memento.feature.auth.LoginScreen
-import com.tangai.memento.feature.auth.SignupScreen
-import com.tangai.memento.feature.auth.ForgotPasswordScreen
-import com.tangai.memento.feature.home.HomeScreen
-import com.tangai.memento.feature.history.HistoryScreen
-import com.tangai.memento.feature.connection.ConnectionScreen
-import com.tangai.memento.feature.post.create.CreatePostScreen
-import com.tangai.memento.feature.post.picker.MediaPickerScreen
-import com.tangai.memento.feature.post.preview.MediaPreviewScreen
+import com.tangai.memento.feature.auth.presentation.ui.ForgotPasswordScreen
+import com.tangai.memento.feature.auth.presentation.ui.LoginScreen
+import com.tangai.memento.feature.auth.presentation.ui.SignupScreen
+import com.tangai.memento.feature.auth.presentation.ui.SplashScreen
+import com.tangai.memento.feature.connection.presentation.ui.ConnectionScreen
+import com.tangai.memento.feature.history.presentation.ui.HistoryScreen
+import com.tangai.memento.feature.home.presentation.ui.HomeScreen
+import com.tangai.memento.feature.post.presentation.ui.CreatePostScreen
+import com.tangai.memento.feature.post.presentation.ui.MediaPickerScreen
+import com.tangai.memento.feature.post.presentation.ui.MediaPreviewScreen
 
 @Composable
 fun MementoNavGraph() {

@@ -1,6 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.hilt.plugin)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -36,6 +39,32 @@ android {
 }
 
 dependencies {
+    // Core modules
+    implementation(project(":core:domain"))
+    implementation(project(":core:designsystem"))
+    implementation(project(":core:ui"))
+    implementation(project(":core:database"))
+    implementation(project(":core:network"))
+    implementation(project(":core:media"))
+    
+    // Feature modules (only presentation layer)
+    implementation(project(":feature:auth:presentation"))
+    implementation(project(":feature:auth:data"))
+    implementation(project(":feature:auth:domain"))
+    implementation(project(":feature:home:presentation"))
+    implementation(project(":feature:home:data"))
+    implementation(project(":feature:home:domain"))
+    implementation(project(":feature:connection:presentation"))
+    implementation(project(":feature:connection:data"))
+    implementation(project(":feature:connection:domain"))
+    implementation(project(":feature:post:presentation"))
+    implementation(project(":feature:post:data"))
+    implementation(project(":feature:post:domain"))
+    implementation(project(":feature:history:presentation"))
+    implementation(project(":feature:history:data"))
+    implementation(project(":feature:history:domain"))
+    
+    // Compose and UI
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -48,6 +77,20 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.navigation.compose)
+    
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    
+    // Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.hilt.navigation.compose)
+    
+    // Fonts
+    implementation(libs.androidx.compose.ui.text.google.fonts)
+    
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
