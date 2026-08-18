@@ -87,9 +87,6 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     
-    // Fonts
-    implementation(libs.androidx.compose.ui.text.google.fonts)
-    
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

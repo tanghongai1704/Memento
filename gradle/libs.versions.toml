@@ -12,12 +12,13 @@ kotlin = "2.4.10"
 composeBom = "2026.08.00"
 navigationCompose = "2.9.8"
 googleServices = "4.5.0"
-googleFonts = "1.12.0"
+googleFonts = "1.7.2"
 hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
 room = "2.8.4"
 firebaseBom = "34.17.0"
 ksp = "2.3.4"
+javaxInject = "1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -50,7 +51,7 @@ hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-com
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
-javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
+javax-inject = { group = "javax.inject", name = "javax.inject", version.ref = "javaxInject" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

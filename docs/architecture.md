@@ -38,7 +38,11 @@ Tài liệu này mô tả **kiến trúc đang áp dụng thực tế trong code
 - `:core:database` (placeholder)
 - `:core:network` (placeholder)
 - `:core:media` (placeholder)
-- `:core:designsystem` (placeholder, theme hiện còn ở app)
+- `:core:designsystem` (**đang dùng**)
+  - Chứa Design System/Theme dùng chung:
+    - `MementoTheme`
+    - Typography + Google Fonts provider
+    - Material color tokens
 
 ### 2.3 Feature modules
 
@@ -93,6 +97,7 @@ Mỗi feature gồm 3 module: `domain`, `data`, `presentation`
  ├─> :feature:*:presentation
  ├─> :feature:*:data        (để Hilt bind impl tại app)
  ├─> :core:domain
+ ├─> :core:designsystem
  └─> :core:ui
 
 :feature:*:presentation
@@ -188,6 +193,7 @@ Routes hiện có:
 - Domain/data/presentation tách riêng
 - Hilt binding tập trung tại `:app`
 - Fake repository cho toàn bộ flow MVP
+- Theme đã tách khỏi `:app` và đặt đúng ở `:core:designsystem`
 
 ## 9.2 Chưa bật (để phase sau)
 
@@ -195,7 +201,6 @@ Routes hiện có:
 - Room thật
 - Đồng bộ offline/real-time production
 - Media processing thực
-- Design system tách hoàn chỉnh sang `:core:designsystem`
 
 ---
 
@@ -210,4 +215,3 @@ Khi thêm code mới, luôn check:
 5. Navigation có bị đẩy vào ViewModel không?
 
 Nếu vi phạm một trong các điểm trên, phải sửa ngay trước khi merge.
-
