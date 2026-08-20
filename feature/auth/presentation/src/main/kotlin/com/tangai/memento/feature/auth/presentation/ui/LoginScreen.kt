@@ -27,7 +27,7 @@ import com.tangai.memento.feature.auth.presentation.viewmodel.LoginViewModel
 @Composable
 fun LoginScreen(
     onNavigateToHome: () -> Unit,
-    onNavigateToSignup: () -> Unit,
+    onNavigateToRegister: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
     viewModel: LoginViewModel = hiltViewModel()
 ) {
@@ -113,10 +113,10 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             TextButton(
-                onClick = onNavigateToSignup,
+                onClick = onNavigateToRegister,
                 enabled = !uiState.isLoading
             ) {
-                Text("Don't have an account? Sign up")
+                Text("Don't have an account? Register")
             }
         }
     }

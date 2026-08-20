@@ -1,6 +1,6 @@
 package com.tangai.memento.di
 
-import com.tangai.memento.feature.auth.data.FakeAuthRepository
+import com.tangai.memento.feature.auth.data.AuthRepositoryImpl
 import com.tangai.memento.feature.auth.domain.AuthRepository
 import com.tangai.memento.feature.connection.data.FakeConnectionRepository
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
@@ -20,7 +20,7 @@ import dagger.hilt.components.SingletonComponent
 abstract class AppModule {
     @Binds
     abstract fun bindAuthRepository(
-        impl: FakeAuthRepository
+        impl: AuthRepositoryImpl
     ): AuthRepository
 
     @Binds

@@ -18,11 +18,22 @@ import javax.inject.Inject
 class CreatePostViewModel @Inject constructor(
     private val postRepository: PostRepository
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(CreatePostUiState())
+    private val _uiState = MutableStateFlow(
+        CreatePostUiState(
+            recipients = listOf(
+                User("user_alice", "Alice"),
+                User("user_bob", "Bob"),
+                User("user_charlie", "Charlie")
+            )
+        )
+    )
     val uiState: StateFlow<CreatePostUiState> = _uiState.asStateFlow()
 
     fun onRecipientSelected(user: User) {
-        _uiState.value = _uiState.value.copy(selectedRecipient = user)
+        _uiState.value = _uiState.value.copy(
+            selectedRecipient = user,
+            errorMessage = null
+        )
     }
 
     fun setDefaultRecipient(user: User) {

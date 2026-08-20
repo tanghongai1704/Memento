@@ -4,6 +4,7 @@ import com.tangai.memento.domain.model.MediaItem
 import com.tangai.memento.domain.model.User
 
 data class CreatePostUiState(
+    val recipients: List<User> = emptyList(),
     val selectedRecipient: User? = null,
     val selectedMedia: List<MediaItem> = emptyList(),
     val isLoading: Boolean = false,

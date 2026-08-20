@@ -1,89 +1,44 @@
 # Memento
 
-## Project Overview
+Memento là ứng dụng Android chia sẻ media **1-1** giữa hai người dùng, xây theo hướng multi-module và Clean Architecture.
 
-Memento is a small 1-to-1 social media application
-that allows connected users to share photos and videos
-in real time.
+## Hiện trạng dự án
 
-The project focuses on:
+- Có các flow chính: **Auth, Home, Connection, Create Post, History**
+- UI dùng **Jetpack Compose**
+- Kiến trúc theo layer: **presentation → domain → data**
+- Data hiện tại đang dùng **Fake Repository** để hoàn thiện luồng MVP
 
-- 1-to-1 media sharing
-- Photo and video support
-- Offline history
-- Media caching
-- Smooth media experience
+## Công nghệ chính
 
-## Tech Stack
+- Kotlin, Coroutines
+- Jetpack Compose, Navigation Compose, Material 3
+- Hilt (DI)
+- Room (module nền tảng)
+- Firebase SDK (đã cấu hình dependency trong project)
 
-- Kotlin
-- Jetpack Compose
-- Navigation Compose
-- Firebase Authentication
-- Cloud Firestore
-- Firebase Storage
-- Room [Planned]
-- Kotlin Coroutines
-- Flow [Planned]
-- Coil [Planned]
-- Media3 [Planned]
+## Cấu trúc module
 
-## Architecture
-
-The application follows an MVVM-based architecture.
-
-UI
-↓
-ViewModel
-↓
-Repository
-↓
-Remote / Local Data Source
-
-## Project Structure
-
-## How to Run
-
-### Requirements
-
-- Android Studio
-- JDK
-- Android Emulator or Android device
-
-### Setup
-
-1. Clone the repository.
-2. Open the project in Android Studio.
-3. Sync Gradle.
-4. Configure Firebase.
-5. Start an emulator or connect an Android device.
-6. Run the app.
-
-## Firebase 
-
-The application uses:
-
-- Firebase Authentication
-- Cloud Firestore
-- Firebase Storage
-
-Firebase configuration instructions will be added
-when Firebase integration is implemented.
-
-## Git Workflow
-
-### Branches
-
-- `main`: stable version
-- `develop`: integration branch
-- `feature/*`: new features
-- `fix/*`: bug fixes
-
-### Example
-
-```bash
-git checkout develop
-git checkout -b feature/login
+```text
+app
+core/
+  common, domain, ui, designsystem, database, network, media
+feature/
+  auth/{domain,data,presentation}
+  home/{domain,data,presentation}
+  connection/{domain,data,presentation}
+  post/{domain,data,presentation}
+  history/{domain,data,presentation}
 ```
 
-## Development Status
+## Chạy dự án
+
+1. Mở project bằng Android Studio (JDK 11+).
+2. Sync Gradle.
+3. Chạy module `app` trên emulator hoặc thiết bị thật.
+
+## Ghi chú
+
+- `docs/architecture.md`: mô tả kiến trúc chi tiết.
+- `docs/differentiating-feature.md`: mô tả differentiating feature **Moment Recap**.
+- `docs/register-firebase-auth.md`: mô tả đầy đủ flow Register Email/Password qua Firebase Auth + Firestore + Room.

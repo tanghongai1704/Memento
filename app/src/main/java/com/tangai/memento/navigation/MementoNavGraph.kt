@@ -11,7 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import com.tangai.memento.core.designsystem.theme.MementoTheme
 import com.tangai.memento.feature.auth.presentation.ui.ForgotPasswordScreen
 import com.tangai.memento.feature.auth.presentation.ui.LoginScreen
-import com.tangai.memento.feature.auth.presentation.ui.SignupScreen
+import com.tangai.memento.feature.auth.presentation.ui.RegisterScreen
 import com.tangai.memento.feature.auth.presentation.ui.SplashScreen
 import com.tangai.memento.feature.connection.presentation.ui.ConnectionScreen
 import com.tangai.memento.feature.history.presentation.ui.HistoryScreen
@@ -50,8 +50,8 @@ fun MementoNavGraph() {
                                 popUpTo(MementoRoute.Login.route) { inclusive = true }
                             }
                         },
-                        onNavigateToSignup = {
-                            navController.navigate(MementoRoute.Signup.route)
+                        onNavigateToRegister = {
+                            navController.navigate(MementoRoute.Register.route)
                         },
                         onNavigateToForgotPassword = {
                             navController.navigate(MementoRoute.ForgotPassword.route)
@@ -59,8 +59,8 @@ fun MementoNavGraph() {
                     )
                 }
 
-                composable(MementoRoute.Signup.route) {
-                    SignupScreen(
+                composable(MementoRoute.Register.route) {
+                    RegisterScreen(
                         onNavigateToHome = {
                             navController.navigate(MementoRoute.Home.route) {
                                 popUpTo(MementoRoute.Login.route) { inclusive = true }

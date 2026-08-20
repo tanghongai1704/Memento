@@ -5,7 +5,7 @@ sealed class MementoRoute(
 ) {
     data object Splash : MementoRoute("splash")
     data object Login : MementoRoute("login")
-    data object Signup : MementoRoute("signup")
+    data object Register : MementoRoute("register")
     data object ForgotPassword : MementoRoute("forgot_password")
     data object Home : MementoRoute("home")
     data object Connection : MementoRoute("connection")
