@@ -1,6 +1,10 @@
 package com.tangai.memento.navigation
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.Scaffold
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
@@ -21,120 +25,125 @@ fun MementoNavGraph() {
     val navController = rememberNavController()
 
     MementoTheme {
-        NavHost(
-            navController = navController,
-            startDestination = MementoRoute.Splash.route
-        ) {
-            composable(MementoRoute.Splash.route) {
-                SplashScreen(
-                    onNavigateToLogin = {
-                        navController.navigate(MementoRoute.Login.route) {
-                            popUpTo(MementoRoute.Splash.route) { inclusive = true }
+        Scaffold(
+            contentWindowInsets = WindowInsets.safeDrawing
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = MementoRoute.Splash.route,
+                modifier = androidx.compose.ui.Modifier.padding(innerPadding)
+            ) {
+                composable(MementoRoute.Splash.route) {
+                    SplashScreen(
+                        onNavigateToLogin = {
+                            navController.navigate(MementoRoute.Login.route) {
+                                popUpTo(MementoRoute.Splash.route) { inclusive = true }
+                            }
                         }
-                    }
-                )
-            }
+                    )
+                }
 
-            composable(MementoRoute.Login.route) {
-                LoginScreen(
-                    onNavigateToHome = {
-                        navController.navigate(MementoRoute.Home.route) {
-                            popUpTo(MementoRoute.Login.route) { inclusive = true }
+                composable(MementoRoute.Login.route) {
+                    LoginScreen(
+                        onNavigateToHome = {
+                            navController.navigate(MementoRoute.Home.route) {
+                                popUpTo(MementoRoute.Login.route) { inclusive = true }
+                            }
+                        },
+                        onNavigateToSignup = {
+                            navController.navigate(MementoRoute.Signup.route)
+                        },
+                        onNavigateToForgotPassword = {
+                            navController.navigate(MementoRoute.ForgotPassword.route)
                         }
-                    },
-                    onNavigateToSignup = {
-                        navController.navigate(MementoRoute.Signup.route)
-                    },
-                    onNavigateToForgotPassword = {
-                        navController.navigate(MementoRoute.ForgotPassword.route)
-                    }
-                )
-            }
+                    )
+                }
 
-            composable(MementoRoute.Signup.route) {
-                SignupScreen(
-                    onNavigateToHome = {
-                        navController.navigate(MementoRoute.Home.route) {
-                            popUpTo(MementoRoute.Login.route) { inclusive = true }
+                composable(MementoRoute.Signup.route) {
+                    SignupScreen(
+                        onNavigateToHome = {
+                            navController.navigate(MementoRoute.Home.route) {
+                                popUpTo(MementoRoute.Login.route) { inclusive = true }
+                            }
+                        },
+                        onNavigateToLogin = {
+                            navController.popBackStack()
                         }
-                    },
-                    onNavigateToLogin = {
-                        navController.popBackStack()
-                    }
-                )
-            }
+                    )
+                }
 
-            composable(MementoRoute.ForgotPassword.route) {
-                ForgotPasswordScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(MementoRoute.Home.route) {
-                HomeScreen(
-                    onNavigateToConnection = {
-                        navController.navigate(MementoRoute.Connection.route)
-                    },
-                    onNavigateToHistory = {
-                        navController.navigate(MementoRoute.History.route)
-                    },
-                    onNavigateToCreatePost = {
-                        navController.navigate(MementoRoute.CreatePost.route)
-                    }
-                )
-            }
-
-            composable(MementoRoute.Connection.route) {
-                ConnectionScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(MementoRoute.History.route) {
-                HistoryScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(MementoRoute.CreatePost.route) {
-                CreatePostScreen(
-                    onNavigateToMediaPicker = {
-                        navController.navigate(MementoRoute.MediaPicker.route)
-                    },
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(MementoRoute.MediaPicker.route) {
-                MediaPickerScreen(
-                    onNavigateToPreview = {
-                        navController.navigate(MementoRoute.MediaPreview.route)
-                    },
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(MementoRoute.MediaPreview.route) {
-                MediaPreviewScreen(
-                    onNavigateBack = {
-                        navController.popBackStack()
-                    },
-                    onNavigateToHome = {
-                        navController.navigate(MementoRoute.Home.route) {
-                            popUpTo(MementoRoute.Home.route) { inclusive = true }
+                composable(MementoRoute.ForgotPassword.route) {
+                    ForgotPasswordScreen(
+                        onNavigateBack = {
+                            navController.popBackStack()
                         }
-                    }
-                )
+                    )
+                }
+
+                composable(MementoRoute.Home.route) {
+                    HomeScreen(
+                        onNavigateToConnection = {
+                            navController.navigate(MementoRoute.Connection.route)
+                        },
+                        onNavigateToHistory = {
+                            navController.navigate(MementoRoute.History.route)
+                        },
+                        onNavigateToCreatePost = {
+                            navController.navigate(MementoRoute.CreatePost.route)
+                        }
+                    )
+                }
+
+                composable(MementoRoute.Connection.route) {
+                    ConnectionScreen(
+                        onNavigateBack = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+
+                composable(MementoRoute.History.route) {
+                    HistoryScreen(
+                        onNavigateBack = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+
+                composable(MementoRoute.CreatePost.route) {
+                    CreatePostScreen(
+                        onNavigateToMediaPicker = {
+                            navController.navigate(MementoRoute.MediaPicker.route)
+                        },
+                        onNavigateBack = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+
+                composable(MementoRoute.MediaPicker.route) {
+                    MediaPickerScreen(
+                        onNavigateToPreview = {
+                            navController.navigate(MementoRoute.MediaPreview.route)
+                        },
+                        onNavigateBack = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+
+                composable(MementoRoute.MediaPreview.route) {
+                    MediaPreviewScreen(
+                        onNavigateBack = {
+                            navController.popBackStack()
+                        },
+                        onNavigateToHome = {
+                            navController.navigate(MementoRoute.Home.route) {
+                                popUpTo(MementoRoute.Home.route) { inclusive = true }
+                            }
+                        }
+                    )
+                }
             }
         }
     }
