@@ -126,6 +126,14 @@ fun MementoNavGraph() {
                     )
                 }
 
+                composable(MementoRoute.ConnectionRequests.route) {
+                    ConnectionScreen(
+                        onNavigateBack = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+
                 composable(MementoRoute.History.route) {
                     HistoryScreen(
                         onNavigateBack = {

@@ -2,6 +2,7 @@ package com.tangai.memento.database.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import com.tangai.memento.database.MementoDatabase
 import com.tangai.memento.database.dao.UserDao
 import com.tangai.memento.database.dao.ConnectionDao
@@ -27,7 +28,9 @@ object DatabaseModule {
             context,
             MementoDatabase::class.java,
             "memento.db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides

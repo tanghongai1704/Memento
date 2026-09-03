@@ -45,6 +45,29 @@ class AuthRepositoryImpl @Inject constructor(
         )
     }
 
+    override suspend fun syncUsers(): Result<Unit> = runCatching {
+        val snapshot = firestore
+            .collection("users")
+            .get()
+            .awaitTask()
+
+        snapshot.documents.mapNotNull { document ->
+            val uid = document.getString("uid") ?: document.id
+            val email = document.getString("email")
+                ?: document.getString("account")
+                ?: document.getString("mail")
+                ?: ""
+            val username = document.getString("username")
+                ?: document.getString("displayName")
+                ?: document.getString("name")
+                ?: ""
+            if (uid.isBlank() || email.isBlank()) return@mapNotNull null
+            User(id = uid, username = username.ifBlank { email }, email = email)
+        }.forEach { user ->
+            userDao.upsertUser(user.toEntity())
+        }
+    }
+
     override fun logout() {
         firebaseAuthDataSource.logout()
     }

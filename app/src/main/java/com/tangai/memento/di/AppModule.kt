@@ -2,8 +2,6 @@ package com.tangai.memento.di
 
 import com.tangai.memento.feature.auth.data.AuthRepositoryImpl
 import com.tangai.memento.feature.auth.domain.AuthRepository
-import com.tangai.memento.feature.connection.data.FakeConnectionRepository
-import com.tangai.memento.feature.connection.domain.ConnectionRepository
 import com.tangai.memento.feature.history.data.FakeHistoryRepository
 import com.tangai.memento.feature.history.domain.HistoryRepository
 import com.tangai.memento.feature.home.data.FakeHomeRepository
@@ -27,11 +25,6 @@ abstract class AppModule {
     abstract fun bindHomeRepository(
         impl: FakeHomeRepository
     ): HomeRepository
-
-    @Binds
-    abstract fun bindConnectionRepository(
-        impl: FakeConnectionRepository
-    ): ConnectionRepository
 
     @Binds
     abstract fun bindPostRepository(
