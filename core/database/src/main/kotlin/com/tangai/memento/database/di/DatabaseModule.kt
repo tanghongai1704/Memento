@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.room.Room
 import com.tangai.memento.database.MementoDatabase
 import com.tangai.memento.database.dao.UserDao
+import com.tangai.memento.database.dao.ConnectionDao
+import com.tangai.memento.database.dao.ConnectionMemberDao
+import com.tangai.memento.database.dao.ConnectionRequestDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,4 +32,13 @@ object DatabaseModule {
 
     @Provides
     fun provideUserDao(database: MementoDatabase): UserDao = database.userDao()
+
+    @Provides
+    fun provideConnectionDao(database: MementoDatabase): ConnectionDao = database.connectionDao()
+
+    @Provides
+    fun provideConnectionMemberDao(database: MementoDatabase): ConnectionMemberDao = database.connectionMemberDao()
+
+    @Provides
+    fun provideConnectionRequestDao(database: MementoDatabase): ConnectionRequestDao = database.connectionRequestDao()
 }
