@@ -14,6 +14,9 @@ local.properties
 .idea/navEditor.xml
 .idea/assetWizardSettings.xml
 
+# Kotlin/IDE temporary files
+*.salive
+
 # macOS
 .DS_Store
 

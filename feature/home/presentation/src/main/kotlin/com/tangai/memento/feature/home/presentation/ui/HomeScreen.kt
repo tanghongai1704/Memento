@@ -38,6 +38,7 @@ fun HomeScreen(
     onNavigateToConnection: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToCreatePost: () -> Unit,
+    onLogout: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -75,6 +76,13 @@ fun HomeScreen(
                     modifier = Modifier.padding(4.dp)
                 ) {
                     Text("History")
+                }
+
+                Button(
+                    onClick = onLogout,
+                    modifier = Modifier.padding(4.dp)
+                ) {
+                    Text("Logout")
                 }
             }
 

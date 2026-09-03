@@ -32,16 +32,26 @@ class LoginViewModel @Inject constructor(
     }
 
     fun onLoginClick(onSuccess: () -> Unit) {
-        if (_uiState.value.account.isEmpty() || _uiState.value.password.isEmpty()) {
+        val account = _uiState.value.account.trim()
+        val password = _uiState.value.password
+
+        if (account.isEmpty() || password.isEmpty()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Please enter both account and password"
+                errorMessage = "Please enter both email and password"
+            )
+            return
+        }
+
+        if (!account.contains("@")) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Please enter the email used for Firebase account."
             )
             return
         }
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            val result = authRepository.login(_uiState.value.account, _uiState.value.password)
+            val result = authRepository.login(account, password)
             _uiState.value = _uiState.value.copy(isLoading = false)
             if (result.isSuccess) {
                 onSuccess()

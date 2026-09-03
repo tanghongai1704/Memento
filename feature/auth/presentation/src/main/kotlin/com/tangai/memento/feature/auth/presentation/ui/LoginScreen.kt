@@ -61,7 +61,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = uiState.account,
                 onValueChange = { viewModel.onAccountChanged(it) },
-                label = { Text("Email / Phone") },
+                label = { Text("Email") },
                 modifier = Modifier.padding(8.dp),
                 enabled = !uiState.isLoading
             )

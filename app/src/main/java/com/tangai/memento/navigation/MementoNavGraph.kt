@@ -4,15 +4,19 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Scaffold
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.tangai.memento.core.designsystem.theme.MementoTheme
 import com.tangai.memento.feature.auth.presentation.ui.ForgotPasswordScreen
 import com.tangai.memento.feature.auth.presentation.ui.LoginScreen
 import com.tangai.memento.feature.auth.presentation.ui.RegisterScreen
 import com.tangai.memento.feature.auth.presentation.ui.SplashScreen
+import com.tangai.memento.feature.auth.presentation.viewmodel.LogoutEffect
+import com.tangai.memento.feature.auth.presentation.viewmodel.LogoutViewModel
 import com.tangai.memento.feature.connection.presentation.ui.ConnectionScreen
 import com.tangai.memento.feature.history.presentation.ui.HistoryScreen
 import com.tangai.memento.feature.home.presentation.ui.HomeScreen
@@ -37,6 +41,11 @@ fun MementoNavGraph() {
                     SplashScreen(
                         onNavigateToLogin = {
                             navController.navigate(MementoRoute.Login.route) {
+                                popUpTo(MementoRoute.Splash.route) { inclusive = true }
+                            }
+                        },
+                        onNavigateToHome = {
+                            navController.navigate(MementoRoute.Home.route) {
                                 popUpTo(MementoRoute.Splash.route) { inclusive = true }
                             }
                         }
@@ -81,6 +90,18 @@ fun MementoNavGraph() {
                 }
 
                 composable(MementoRoute.Home.route) {
+                    val logoutViewModel: LogoutViewModel = hiltViewModel()
+                    LaunchedEffect(Unit) {
+                        logoutViewModel.effect.collect { effect ->
+                            when (effect) {
+                                LogoutEffect.NavigateToLogin -> {
+                                    navController.navigate(MementoRoute.Login.route) {
+                                        popUpTo(MementoRoute.Home.route) { inclusive = true }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     HomeScreen(
                         onNavigateToConnection = {
                             navController.navigate(MementoRoute.Connection.route)
@@ -90,6 +111,9 @@ fun MementoNavGraph() {
                         },
                         onNavigateToCreatePost = {
                             navController.navigate(MementoRoute.CreatePost.route)
+                        },
+                        onLogout = {
+                            logoutViewModel.logout()
                         }
                     )
                 }

@@ -45,6 +45,14 @@ class AuthRepositoryImpl @Inject constructor(
         )
     }
 
+    override fun logout() {
+        firebaseAuthDataSource.logout()
+    }
+
+    override fun isUserLoggedIn(): Boolean {
+        return firebaseAuthDataSource.isUserLoggedIn()
+    }
+
     private suspend fun createUserProfile(user: User) {
         val payload = mapOf(
             "uid" to user.id,
@@ -66,7 +74,7 @@ class AuthRepositoryImpl @Inject constructor(
                 AuthDataError.EmailAlreadyInUse -> RegisterError.EmailAlreadyInUse
                 AuthDataError.WeakPassword -> RegisterError.WeakPassword
                 AuthDataError.InvalidEmail -> RegisterError.InvalidEmail
-                AuthDataError.InvalidCredentials -> RegisterError.Unknown("Invalid credentials.")
+                AuthDataError.InvalidCredentials -> RegisterError.Unknown(message ?: "Invalid email or password.")
                 AuthDataError.Network -> RegisterError.Network
                 is AuthDataError.Unknown -> RegisterError.Unknown(error.message)
             }
