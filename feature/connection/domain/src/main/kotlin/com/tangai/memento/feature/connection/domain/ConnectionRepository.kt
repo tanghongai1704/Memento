@@ -17,6 +17,7 @@ interface ConnectionRepository {
     ): Result<Unit>
 
     suspend fun getPendingRequests(): Result<List<ConnectionRequest>>
+    suspend fun getSentPendingRequests(): Result<List<ConnectionRequest>>
     suspend fun acceptConnectionRequest(requestId: String): Result<Unit>
     suspend fun rejectConnectionRequest(requestId: String): Result<Unit>
     suspend fun hasDuplicateConnection(firstUserId: String, secondUserId: String): Result<Boolean>

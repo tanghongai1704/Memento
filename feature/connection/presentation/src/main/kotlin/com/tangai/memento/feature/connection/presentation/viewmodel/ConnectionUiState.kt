@@ -10,6 +10,7 @@ data class ConnectionUiState(
     val connectedUsers: List<User> = emptyList(),
     val pendingRequests: List<ConnectionRequest> = emptyList(),
     val incomingRequests: List<ConnectionRequest> = emptyList(),
+    val sentPendingRequests: List<ConnectionRequest> = emptyList(),
     val selectedConnection: Connection? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,

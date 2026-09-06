@@ -70,7 +70,8 @@ fun ConnectionScreen(
                 title = "Search Result",
                 users = uiState.searchResults,
                 emptyText = "No users found",
-                actionLabel = "Request",
+                sentPendingReceiverIds = uiState.sentPendingRequests.map { it.receiverId }.toSet(),
+                connectedUserIds = uiState.connectedUsers.map { it.id }.toSet(),
                 onAction = { viewModel.sendConnectionRequest(it.id) }
             )
         }
@@ -99,7 +100,8 @@ fun ConnectionScreen(
                 title = "Connected Users",
                 users = uiState.connectedUsers,
                 emptyText = "No connected users",
-                actionLabel = "Connected",
+                sentPendingReceiverIds = emptySet(),
+                connectedUserIds = uiState.connectedUsers.map { it.id }.toSet(),
                 onAction = {}
             )
         }
@@ -135,7 +137,8 @@ private fun UserList(
     title: String,
     users: List<com.tangai.memento.domain.model.User>,
     emptyText: String,
-    actionLabel: String,
+    sentPendingReceiverIds: Set<String> = emptySet(),
+    connectedUserIds: Set<String> = emptySet(),
     onAction: (com.tangai.memento.domain.model.User) -> Unit
 ) {
     Column {
@@ -153,8 +156,18 @@ private fun UserList(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(user.username)
-                            Button(onClick = { onAction(user) }) {
-                                Text(actionLabel)
+                            val isConnected = connectedUserIds.contains(user.id)
+                            val isPending = sentPendingReceiverIds.contains(user.id)
+                            val buttonLabel = when {
+                                isConnected -> "Connected"
+                                isPending -> "Pending"
+                                else -> "Request"
+                            }
+                            Button(
+                                enabled = !isConnected && !isPending,
+                                onClick = { onAction(user) }
+                            ) {
+                                Text(buttonLabel)
                             }
                         }
                     }

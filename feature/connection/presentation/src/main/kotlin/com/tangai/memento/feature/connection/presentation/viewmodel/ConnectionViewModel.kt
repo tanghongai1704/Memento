@@ -22,6 +22,7 @@ class ConnectionViewModel @Inject constructor(
     init {
         loadConnections()
         loadPendingRequests()
+        loadSentPendingRequests()
     }
 
     fun onQueryChanged(query: String) {
@@ -63,6 +64,7 @@ class ConnectionViewModel @Inject constructor(
             connectionRepository.sendConnectionRequest(receiverId, null).fold(
                 onSuccess = {
                     loadPendingRequests()
+                    loadSentPendingRequests()
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
@@ -95,10 +97,14 @@ class ConnectionViewModel @Inject constructor(
             val result = connectionRepository.getCurrentUserConnections()
             result.fold(
                 onSuccess = { connections ->
+                    val currentUserId = connections.firstOrNull()?.createdBy
                     _uiState.value = _uiState.value.copy(
                         connectedUsers = connections.flatMap { connection ->
                             connection.members.mapNotNull { member ->
-                                if (member.userId == connection.createdBy) null else User(member.userId, member.userId)
+                                if (member.userId == currentUserId) null else {
+                                    _uiState.value.searchResults.firstOrNull { it.id == member.userId }
+                                        ?: User(member.userId, member.userId)
+                                }
                             }
                         }.distinctBy(User::id),
                         connectionState = if (connections.isEmpty()) ScreenState.Empty else ScreenState.Success,
@@ -132,6 +138,21 @@ class ConnectionViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         requestState = ScreenState.Error,
                         errorMessage = it.message ?: "Failed to load requests"
+                    )
+                }
+            )
+        }
+    }
+
+    private fun loadSentPendingRequests() {
+        viewModelScope.launch {
+            connectionRepository.getSentPendingRequests().fold(
+                onSuccess = { requests ->
+                    _uiState.value = _uiState.value.copy(sentPendingRequests = requests)
+                },
+                onFailure = {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = it.message ?: "Failed to load sent requests"
                     )
                 }
             )

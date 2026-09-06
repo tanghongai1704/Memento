@@ -112,6 +112,11 @@ class ConnectionRepositoryImpl @Inject constructor(
         connectionRequestDao.getPendingRequestsForUser(currentUserId).map { it.toDomain() }
     }
 
+    override suspend fun getSentPendingRequests(): Result<List<ConnectionRequest>> = runCatching {
+        val currentUserId = requireCurrentUserId()
+        connectionRequestDao.getSentPendingRequestsByUser(currentUserId).map { it.toDomain() }
+    }
+
     override suspend fun acceptConnectionRequest(requestId: String): Result<Unit> = runCatching {
         val request = connectionRequestDao.getRequestById(requestId)
             ?: throw IllegalStateException("Request not found.")
