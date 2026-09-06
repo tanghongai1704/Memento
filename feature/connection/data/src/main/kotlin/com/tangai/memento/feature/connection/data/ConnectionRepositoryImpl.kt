@@ -12,12 +12,14 @@ import com.tangai.memento.database.model.toEntity
 import com.tangai.memento.domain.model.Connection
 import com.tangai.memento.domain.model.ConnectionMember
 import com.tangai.memento.domain.model.ConnectionRequest
+import com.tangai.memento.domain.model.ConnectionStatus
 import com.tangai.memento.domain.model.ConnectionType
 import com.tangai.memento.domain.model.MemberStatus
 import com.tangai.memento.domain.model.RequestStatus
 import com.tangai.memento.domain.model.User
 import com.google.firebase.auth.FirebaseAuth
 import com.tangai.memento.feature.connection.data.mapper.toConnectionException
+import com.tangai.memento.feature.connection.data.source.ConnectionFirestoreDataSource
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
 import javax.inject.Inject
 
@@ -26,7 +28,8 @@ class ConnectionRepositoryImpl @Inject constructor(
     private val connectionMemberDao: ConnectionMemberDao,
     private val connectionRequestDao: ConnectionRequestDao,
     private val userDao: UserDao,
-    private val firebaseAuth: FirebaseAuth
+    private val firebaseAuth: FirebaseAuth,
+    private val firestoreDataSource: ConnectionFirestoreDataSource
 ) : ConnectionRepository {
     override suspend fun createDirectConnection(userId: String): Result<Unit> = runCatching {
         val currentUserId = requireCurrentUserId()
@@ -35,23 +38,21 @@ class ConnectionRepositoryImpl @Inject constructor(
 
         val now = System.currentTimeMillis()
         val connectionId = buildDirectConnectionId(currentUserId, userId)
-        connectionDao.upsertConnection(
-            ConnectionEntity(
-                id = connectionId,
-                type = ConnectionType.DIRECT.name,
-                name = null,
-                description = null,
-                createdBy = currentUserId,
-                createdAt = now,
-                updatedAt = now
-            )
+        val connection = com.tangai.memento.feature.connection.data.model.ConnectionRemote(
+            id = connectionId,
+            type = ConnectionType.DIRECT,
+            createdBy = currentUserId,
+            status = ConnectionStatus.ACTIVE,
+            createdAt = now,
+            updatedAt = now
         )
-        connectionMemberDao.upsertMembers(
-            listOf(
-                ConnectionMemberEntity(connectionId, currentUserId, "member", now, MemberStatus.ACTIVE.name),
-                ConnectionMemberEntity(connectionId, userId, "member", now, MemberStatus.ACTIVE.name)
-            )
+        val members = listOf(
+            com.tangai.memento.feature.connection.data.model.ConnectionMemberRemote(connectionId, currentUserId, "member", now, MemberStatus.ACTIVE),
+            com.tangai.memento.feature.connection.data.model.ConnectionMemberRemote(connectionId, userId, "member", now, MemberStatus.ACTIVE)
         )
+        firestoreDataSource.upsertConnection(connection).getOrThrow()
+        firestoreDataSource.upsertMembers(members).getOrThrow()
+        syncConnectionsFromFirestore().getOrThrow()
     }
 
     override suspend fun getCurrentUserConnections(): Result<List<Connection>> = runCatching {
@@ -92,19 +93,19 @@ class ConnectionRepositoryImpl @Inject constructor(
         require(!hasDuplicateRequest(senderId, receiverId).getOrThrow())
 
         val now = System.currentTimeMillis()
-        connectionRequestDao.upsertRequest(
-            ConnectionRequestEntity(
-                id = "${senderId}_${receiverId}_$now",
-                connectionId = null,
-                senderId = senderId,
-                receiverId = receiverId,
-                connectionType = ConnectionType.DIRECT.name,
-                message = message,
-                status = RequestStatus.PENDING.name,
-                createdAt = now,
-                respondedAt = null
-            )
+        val request = com.tangai.memento.feature.connection.data.model.ConnectionRequestRemote(
+            id = "${senderId}_${receiverId}_$now",
+            connectionId = null,
+            senderId = senderId,
+            receiverId = receiverId,
+            connectionType = ConnectionType.DIRECT,
+            status = RequestStatus.PENDING,
+            createdAt = now,
+            updatedAt = now,
+            message = message
         )
+        firestoreDataSource.upsertRequest(request).getOrThrow()
+        syncRequestsFromFirestore().getOrThrow()
     }
 
     override suspend fun getPendingRequests(): Result<List<ConnectionRequest>> = runCatching {
@@ -130,6 +131,8 @@ class ConnectionRepositoryImpl @Inject constructor(
                 connectionId = buildDirectConnectionId(request.senderId, request.receiverId)
             )
         )
+        syncConnectionsFromFirestore().getOrThrow()
+        syncRequestsFromFirestore().getOrThrow()
     }
 
     override suspend fun rejectConnectionRequest(requestId: String): Result<Unit> = runCatching {
@@ -143,6 +146,7 @@ class ConnectionRepositoryImpl @Inject constructor(
                 respondedAt = System.currentTimeMillis()
             )
         )
+        syncRequestsFromFirestore().getOrThrow()
     }
 
     override suspend fun hasDuplicateConnection(firstUserId: String, secondUserId: String): Result<Boolean> = runCatching {
@@ -155,6 +159,7 @@ class ConnectionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun loadConnections(): Result<List<User>> = runCatching {
+        syncConnectionsFromFirestore().getOrThrow()
         val currentUserId = requireCurrentUserId()
         connectionMemberDao.getActiveMembershipsForUser(currentUserId)
             .mapNotNull { membership ->
@@ -164,6 +169,7 @@ class ConnectionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun searchUsers(query: String): Result<List<User>> = runCatching {
+        // search stays local for fast UI; auth sync keeps user data in Room
         val currentUserId = requireCurrentUserId()
         val normalizedQuery = query.trim().lowercase()
         if (normalizedQuery.isEmpty()) return@runCatching emptyList()
@@ -187,4 +193,56 @@ class ConnectionRepositoryImpl @Inject constructor(
     private fun buildDirectConnectionId(firstUserId: String, secondUserId: String): String {
         return listOf(firstUserId, secondUserId).sorted().joinToString("_")
     }
+
+    private suspend fun syncConnectionsFromFirestore(): Result<Unit> = runCatching {
+        val currentUserId = requireCurrentUserId()
+        val connections = firestoreDataSource.getConnectionsForCurrentUser().getOrThrow()
+        connections.forEach { connection ->
+            connectionDao.upsertConnection(
+                ConnectionEntity(
+                    id = connection.id,
+                    type = connection.type.name,
+                    status = connection.status.name,
+                    name = connection.name,
+                    description = connection.description,
+                    createdBy = connection.createdBy,
+                    createdAt = connection.createdAt,
+                    updatedAt = connection.updatedAt
+                )
+            )
+            firestoreDataSource.getMembersForConnection(connection.id).getOrThrow().forEach { member ->
+                connectionMemberDao.upsertMember(
+                    ConnectionMemberEntity(
+                        connectionId = member.connectionId,
+                        userId = member.userId,
+                        role = member.role,
+                        joinedAt = member.joinedAt,
+                        status = member.status.name
+                    )
+                )
+            }
+        }
+        connectionMemberDao.getActiveMembershipsForUser(currentUserId)
+    }.map { Unit }
+
+    private suspend fun syncRequestsFromFirestore(): Result<Unit> = runCatching {
+        val incoming = firestoreDataSource.getRequestsForCurrentUser().getOrThrow()
+        val sent = firestoreDataSource.getSentRequestsForCurrentUser().getOrThrow()
+        (incoming + sent).distinctBy { it.id }.forEach { request ->
+            connectionRequestDao.upsertRequest(
+                ConnectionRequestEntity(
+                    id = request.id,
+                    connectionId = request.connectionId,
+                    senderId = request.senderId,
+                    receiverId = request.receiverId,
+                    connectionType = request.connectionType.name,
+                    message = request.message,
+                    status = request.status.name,
+                    createdAt = request.createdAt,
+                    respondedAt = request.updatedAt.takeIf { it > 0 }
+                )
+            )
+        }
+    }.map { Unit }
+
 }
