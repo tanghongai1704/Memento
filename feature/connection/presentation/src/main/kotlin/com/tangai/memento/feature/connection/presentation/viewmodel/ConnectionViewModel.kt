@@ -44,6 +44,7 @@ class ConnectionViewModel @Inject constructor(
                 onSuccess = { users ->
                     _uiState.value = _uiState.value.copy(
                         searchResults = users,
+                        userLookup = _uiState.value.userLookup + users.associateBy(User::id),
                         searchState = if (users.isEmpty()) ScreenState.Empty else ScreenState.Success
                     )
                 },
@@ -97,14 +98,10 @@ class ConnectionViewModel @Inject constructor(
             val result = connectionRepository.getCurrentUserConnections()
             result.fold(
                 onSuccess = { connections ->
-                    val currentUserId = connections.firstOrNull()?.createdBy
                     _uiState.value = _uiState.value.copy(
                         connectedUsers = connections.flatMap { connection ->
                             connection.members.mapNotNull { member ->
-                                if (member.userId == currentUserId) null else {
-                                    _uiState.value.searchResults.firstOrNull { it.id == member.userId }
-                                        ?: User(member.userId, member.userId)
-                                }
+                                _uiState.value.userLookup[member.userId]
                             }
                         }.distinctBy(User::id),
                         connectionState = if (connections.isEmpty()) ScreenState.Empty else ScreenState.Success,
@@ -131,6 +128,14 @@ class ConnectionViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         pendingRequests = requests,
                         incomingRequests = requests,
+                        userLookup = _uiState.value.userLookup + requests.flatMap {
+                            listOf(
+                                it.senderId,
+                                it.receiverId
+                            )
+                        }.associateWith { id ->
+                            _uiState.value.userLookup[id] ?: User(id, id)
+                        },
                         requestState = if (requests.isEmpty()) ScreenState.Empty else ScreenState.Success
                     )
                 },
@@ -148,7 +153,14 @@ class ConnectionViewModel @Inject constructor(
         viewModelScope.launch {
             connectionRepository.getSentPendingRequests().fold(
                 onSuccess = { requests ->
-                    _uiState.value = _uiState.value.copy(sentPendingRequests = requests)
+                    _uiState.value = _uiState.value.copy(
+                        sentPendingRequests = requests,
+                        userLookup = _uiState.value.userLookup + requests.flatMap {
+                            listOf(it.senderId, it.receiverId)
+                        }.associateWith { id ->
+                            _uiState.value.userLookup[id] ?: User(id, id)
+                        }
+                    )
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(

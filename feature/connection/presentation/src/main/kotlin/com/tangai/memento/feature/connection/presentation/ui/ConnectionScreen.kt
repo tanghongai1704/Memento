@@ -85,6 +85,7 @@ fun ConnectionScreen(
             ScreenState.Success -> RequestList(
                 title = "Incoming Requests",
                 requests = uiState.incomingRequests,
+                userLookup = uiState.userLookup,
                 onAccept = viewModel::acceptConnectionRequest,
                 onReject = viewModel::rejectConnectionRequest
             )
@@ -181,6 +182,7 @@ private fun UserList(
 private fun RequestList(
     title: String,
     requests: List<com.tangai.memento.domain.model.ConnectionRequest>,
+    userLookup: Map<String, com.tangai.memento.domain.model.User>,
     onAccept: (String) -> Unit,
     onReject: (String) -> Unit
 ) {
@@ -195,7 +197,7 @@ private fun RequestList(
                             .padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(request.senderId)
+                        Text(userLookup[request.senderId]?.username ?: request.senderId)
                         Row {
                             Button(onClick = { onAccept(request.id) }) { Text("Accept") }
                             Button(onClick = { onReject(request.id) }) { Text("Reject") }
