@@ -2,7 +2,7 @@ package com.tangai.memento.feature.connection.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-feeatimport com.tangai.memento.domain.model.User
+import com.tangai.memento.domain.model.User
 import com.tangai.memento.feature.auth.domain.AuthRepository
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
