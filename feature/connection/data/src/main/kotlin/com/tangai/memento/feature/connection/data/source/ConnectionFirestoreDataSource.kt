@@ -94,12 +94,25 @@ class ConnectionFirestoreDataSource @Inject constructor(
 
     suspend fun getConnectionsForCurrentUser(): Result<List<ConnectionRemote>> = runCatching {
         val userId = requireUserId()
-        firestore.collection("connections")
-            .whereEqualTo("createdBy", userId)
+        val connectionIds = firestore.collection("connection_members")
+            .whereEqualTo("userId", userId)
+            .whereEqualTo("status", MemberStatus.ACTIVE.name)
             .get()
             .awaitTask()
             .documents
-            .mapNotNull { it.toConnectionRemote() }
+            .mapNotNull { it.getString("connectionId") }
+            .distinct()
+
+        if (connectionIds.isEmpty()) return@runCatching emptyList()
+
+        firestore.collection("connections")
+            .get()
+            .awaitTask()
+            .documents
+            .mapNotNull { doc ->
+                val connectionId = doc.getString("connectionId") ?: doc.id
+                if (connectionId in connectionIds) doc.toConnectionRemote() else null
+            }
     }
 
     suspend fun getRequestsForCurrentUser(): Result<List<ConnectionRequestRemote>> = runCatching {

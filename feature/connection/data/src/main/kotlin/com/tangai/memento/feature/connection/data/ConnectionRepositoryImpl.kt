@@ -180,10 +180,24 @@ class ConnectionRepositoryImpl @Inject constructor(
 
     override suspend fun loadConnections(): Result<List<User>> = runCatching {
         syncConnectionsFromFirestore().getOrThrow()
+
         val currentUserId = requireCurrentUserId()
-        connectionMemberDao.getActiveMembershipsForUser(currentUserId)
-            .mapNotNull { membership ->
-                if (membership.userId == currentUserId) null else userDao.getUserById(membership.userId)?.toDomain()
+
+        val memberships =
+            connectionMemberDao.getActiveMembershipsForUser(currentUserId)
+
+        memberships
+            .flatMap { membership ->
+                connectionMemberDao
+                    .getMembersByConnectionId(membership.connectionId)
+            }
+            .filterNot { member ->
+                member.userId == currentUserId
+            }
+            .mapNotNull { member ->
+                userDao
+                    .getUserById(member.userId)
+                    ?.toDomain()
             }
             .distinctBy(User::id)
     }
@@ -194,19 +208,20 @@ class ConnectionRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             return@runCatching emptyList()
         }
-        
-        val normalizedQuery = query.trim().lowercase()
-        if (normalizedQuery.isEmpty()) return@runCatching emptyList()
 
-        userDao.getAllUsers()
+        val normalizedQuery = query.trim().lowercase()
+        val allUsers = userDao.getAllUsers()
             .map { it.toDomain() }
             .filterNot { it.id == currentUserId }
-            .filter {
-                it.username.lowercase().contains(normalizedQuery) ||
-                    it.email.lowercase().contains(normalizedQuery) ||
-                    it.id.lowercase().contains(normalizedQuery)
-            }
             .sortedBy { it.username.lowercase() }
+
+        if (normalizedQuery.isEmpty()) return@runCatching allUsers
+
+        allUsers.filter {
+            it.username.lowercase().contains(normalizedQuery) ||
+                it.email.lowercase().contains(normalizedQuery) ||
+                it.id.lowercase().contains(normalizedQuery)
+        }
     }
 
     private fun requireCurrentUserId(): String {

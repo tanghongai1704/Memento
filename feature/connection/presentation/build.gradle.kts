@@ -30,6 +30,8 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":feature:auth:domain"))
     implementation(project(":feature:connection:domain"))
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
     
     implementation(libs.androidx.core.ktx)
     implementation(platform(libs.androidx.compose.bom))
