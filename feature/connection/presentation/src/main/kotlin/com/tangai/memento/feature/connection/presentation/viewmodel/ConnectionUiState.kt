@@ -14,6 +14,7 @@ data class ConnectionUiState(
     val userLookup: Map<String, User> = emptyMap(),
     val selectedConnection: Connection? = null,
     val isLoading: Boolean = false,
+    val isBootstrappingUsers: Boolean = false,
     val errorMessage: String? = null,
     val searchState: ScreenState = ScreenState.Empty,
     val connectionState: ScreenState = ScreenState.Empty,

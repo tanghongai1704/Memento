@@ -28,6 +28,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:ui"))
+    implementation(project(":feature:auth:domain"))
     implementation(project(":feature:connection:domain"))
     
     implementation(libs.androidx.core.ktx)

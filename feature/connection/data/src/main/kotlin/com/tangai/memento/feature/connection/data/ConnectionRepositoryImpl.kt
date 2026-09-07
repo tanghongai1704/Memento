@@ -122,13 +122,25 @@ class ConnectionRepositoryImpl @Inject constructor(
         val request = connectionRequestDao.getRequestById(requestId)
             ?: throw IllegalStateException("Request not found.")
         require(request.status == RequestStatus.PENDING.name)
-
+ 
+        val currentUserId = requireCurrentUserId()
+        require(request.receiverId == currentUserId)
+ 
+        val connectionId = buildDirectConnectionId(request.senderId, request.receiverId)
+         
         createDirectConnection(request.senderId).getOrThrow()
+         
+        firestoreDataSource.updateRequestStatus(
+            requestId,
+            RequestStatus.ACCEPTED.name,
+            connectionId
+        ).getOrThrow()
+         
         connectionRequestDao.updateRequest(
             request.copy(
                 status = RequestStatus.ACCEPTED.name,
                 respondedAt = System.currentTimeMillis(),
-                connectionId = buildDirectConnectionId(request.senderId, request.receiverId)
+                connectionId = connectionId
             )
         )
         syncConnectionsFromFirestore().getOrThrow()
@@ -139,7 +151,15 @@ class ConnectionRepositoryImpl @Inject constructor(
         val request = connectionRequestDao.getRequestById(requestId)
             ?: throw IllegalStateException("Request not found.")
         require(request.status == RequestStatus.PENDING.name)
-
+ 
+        val currentUserId = requireCurrentUserId()
+        require(request.receiverId == currentUserId)
+ 
+        firestoreDataSource.updateRequestStatus(
+            requestId,
+            RequestStatus.REJECTED.name
+        ).getOrThrow()
+         
         connectionRequestDao.updateRequest(
             request.copy(
                 status = RequestStatus.REJECTED.name,
@@ -169,8 +189,12 @@ class ConnectionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun searchUsers(query: String): Result<List<User>> = runCatching {
-        // search stays local for fast UI; auth sync keeps user data in Room
-        val currentUserId = requireCurrentUserId()
+        val currentUserId = try {
+            requireCurrentUserId()
+        } catch (e: Exception) {
+            return@runCatching emptyList()
+        }
+        
         val normalizedQuery = query.trim().lowercase()
         if (normalizedQuery.isEmpty()) return@runCatching emptyList()
 

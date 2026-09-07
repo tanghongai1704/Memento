@@ -2,8 +2,8 @@ package com.tangai.memento.feature.connection.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tangai.memento.domain.model.ConnectionRequest
-import com.tangai.memento.domain.model.User
+feeatimport com.tangai.memento.domain.model.User
+import com.tangai.memento.feature.auth.domain.AuthRepository
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,15 +14,15 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ConnectionViewModel @Inject constructor(
-    private val connectionRepository: ConnectionRepository
+    private val connectionRepository: ConnectionRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ConnectionUiState(isLoading = true))
     val uiState: StateFlow<ConnectionUiState> = _uiState.asStateFlow()
+    private var usersBootstrapped = false
 
     init {
-        loadConnections()
-        loadPendingRequests()
-        loadSentPendingRequests()
+        bootstrapUsersThenLoad()
     }
 
     fun onQueryChanged(query: String) {
@@ -79,16 +79,32 @@ class ConnectionViewModel @Inject constructor(
 
     fun acceptConnectionRequest(requestId: String) {
         viewModelScope.launch {
-            connectionRepository.acceptConnectionRequest(requestId)
-            loadConnections()
-            loadPendingRequests()
+            connectionRepository.acceptConnectionRequest(requestId).fold(
+                onSuccess = {
+                    loadConnections()
+                    loadPendingRequests()
+                },
+                onFailure = {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = it.message ?: "Failed to accept request"
+                    )
+                }
+            )
         }
     }
 
     fun rejectConnectionRequest(requestId: String) {
         viewModelScope.launch {
-            connectionRepository.rejectConnectionRequest(requestId)
-            loadPendingRequests()
+            connectionRepository.rejectConnectionRequest(requestId).fold(
+                onSuccess = {
+                    loadPendingRequests()
+                },
+                onFailure = {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = it.message ?: "Failed to reject request"
+                    )
+                }
+            )
         }
     }
 
@@ -98,15 +114,25 @@ class ConnectionViewModel @Inject constructor(
             val result = connectionRepository.getCurrentUserConnections()
             result.fold(
                 onSuccess = { connections ->
+                    val memberIds = connections.flatMap { it.members.map { m -> m.userId } }.distinct()
+                    val missingIds = memberIds.filterNot { _uiState.value.userLookup.containsKey(it) }
+                    
+                    val users = connections.flatMap { connection ->
+                        connection.members.mapNotNull { member ->
+                            _uiState.value.userLookup[member.userId]
+                        }
+                    }.distinctBy(User::id)
+                    
                     _uiState.value = _uiState.value.copy(
-                        connectedUsers = connections.flatMap { connection ->
-                            connection.members.mapNotNull { member ->
-                                _uiState.value.userLookup[member.userId]
-                            }
-                        }.distinctBy(User::id),
+                        connectedUsers = users,
+                        userLookup = _uiState.value.userLookup + users.associateBy(User::id),
                         connectionState = if (connections.isEmpty()) ScreenState.Empty else ScreenState.Success,
                         isLoading = false
                     )
+                    
+                    if (missingIds.isNotEmpty()) {
+                        loadMissingUsers(missingIds)
+                    }
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
@@ -125,19 +151,23 @@ class ConnectionViewModel @Inject constructor(
             val result = connectionRepository.getPendingRequests()
             result.fold(
                 onSuccess = { requests ->
+                    val userIds = requests.flatMap { listOf(it.senderId, it.receiverId) }
+                    val missingIds = userIds.filterNot { _uiState.value.userLookup.containsKey(it) }
+                    
+                    val lookupUpdates = userIds.associateWith { id ->
+                        _uiState.value.userLookup[id] ?: User(id, id)
+                    }
+                    
                     _uiState.value = _uiState.value.copy(
                         pendingRequests = requests,
                         incomingRequests = requests,
-                        userLookup = _uiState.value.userLookup + requests.flatMap {
-                            listOf(
-                                it.senderId,
-                                it.receiverId
-                            )
-                        }.associateWith { id ->
-                            _uiState.value.userLookup[id] ?: User(id, id)
-                        },
+                        userLookup = _uiState.value.userLookup + lookupUpdates,
                         requestState = if (requests.isEmpty()) ScreenState.Empty else ScreenState.Success
                     )
+                    
+                    if (missingIds.isNotEmpty()) {
+                        loadMissingUsers(missingIds)
+                    }
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
@@ -153,13 +183,14 @@ class ConnectionViewModel @Inject constructor(
         viewModelScope.launch {
             connectionRepository.getSentPendingRequests().fold(
                 onSuccess = { requests ->
+                    val lookupUpdates = requests.flatMap {
+                        listOf(it.senderId, it.receiverId)
+                    }.associateWith { id ->
+                        _uiState.value.userLookup[id] ?: User(id, id)
+                    }
                     _uiState.value = _uiState.value.copy(
                         sentPendingRequests = requests,
-                        userLookup = _uiState.value.userLookup + requests.flatMap {
-                            listOf(it.senderId, it.receiverId)
-                        }.associateWith { id ->
-                            _uiState.value.userLookup[id] ?: User(id, id)
-                        }
+                        userLookup = _uiState.value.userLookup + lookupUpdates
                     )
                 },
                 onFailure = {
@@ -167,6 +198,40 @@ class ConnectionViewModel @Inject constructor(
                         errorMessage = it.message ?: "Failed to load sent requests"
                     )
                 }
+            )
+        }
+    }
+
+    private fun bootstrapUsersThenLoad() {
+        viewModelScope.launch {
+            if (!usersBootstrapped) {
+                _uiState.value = _uiState.value.copy(isBootstrappingUsers = true)
+                authRepository.syncUsers().onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Failed to sync users: ${error.message ?: "Unknown error"}"
+                    )
+                }
+                usersBootstrapped = true
+                _uiState.value = _uiState.value.copy(isBootstrappingUsers = false)
+            }
+            loadConnections()
+            loadPendingRequests()
+            loadSentPendingRequests()
+        }
+    }
+
+    private fun loadMissingUsers(userIds: List<String>) {
+        viewModelScope.launch {
+            connectionRepository.searchUsers("").fold(
+                onSuccess = { allUsers ->
+                    val usersToAdd = allUsers.filter { userIds.contains(it.id) }
+                    if (usersToAdd.isNotEmpty()) {
+                        _uiState.value = _uiState.value.copy(
+                            userLookup = _uiState.value.userLookup + usersToAdd.associateBy(User::id)
+                        )
+                    }
+                },
+                onFailure = {}
             )
         }
     }

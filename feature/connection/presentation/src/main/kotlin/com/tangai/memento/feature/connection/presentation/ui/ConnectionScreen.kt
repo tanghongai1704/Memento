@@ -21,7 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.feature.connection.presentation.viewmodel.ConnectionViewModel
 import com.tangai.memento.feature.connection.presentation.viewmodel.ScreenState
@@ -38,6 +38,11 @@ fun ConnectionScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        if (uiState.isBootstrappingUsers) {
+            LoadingBlock("Syncing users...")
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

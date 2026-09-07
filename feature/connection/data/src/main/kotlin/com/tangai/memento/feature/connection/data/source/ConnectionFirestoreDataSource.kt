@@ -78,6 +78,20 @@ class ConnectionFirestoreDataSource @Inject constructor(
             .awaitTask()
     }
 
+    suspend fun updateRequestStatus(requestId: String, status: String, connectionId: String? = null): Result<Unit> = runCatching {
+        val updates = mutableMapOf<String, Any>(
+            "status" to status,
+            "updatedAt" to System.currentTimeMillis()
+        )
+        if (connectionId != null) {
+            updates["connectionId"] = connectionId
+        }
+        firestore.collection("connection_requests")
+            .document(requestId)
+            .update(updates)
+            .awaitTask()
+    }
+
     suspend fun getConnectionsForCurrentUser(): Result<List<ConnectionRemote>> = runCatching {
         val userId = requireUserId()
         firestore.collection("connections")
