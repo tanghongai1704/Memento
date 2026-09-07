@@ -14,12 +14,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,7 +30,6 @@ import com.tangai.memento.feature.connection.presentation.viewmodel.ScreenState
 
 @Composable
 fun ConnectionScreen(
-    onNavigateBack: () -> Unit,
     viewModel: ConnectionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -43,14 +44,15 @@ fun ConnectionScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = "Connections")
-            Button(onClick = onNavigateBack) { Text("Back") }
-        }
+        Text(
+            text = "Connections",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 

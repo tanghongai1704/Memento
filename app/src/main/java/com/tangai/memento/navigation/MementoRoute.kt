@@ -10,6 +10,7 @@ sealed class MementoRoute(
     data object Home : MementoRoute("home")
     data object Connection : MementoRoute("connection")
     data object History : MementoRoute("history")
+    data object Profile : MementoRoute("profile")
     data object CreatePost : MementoRoute("create_post")
     data object MediaPicker : MementoRoute("media_picker")
     data object MediaPreview : MementoRoute("media_preview")

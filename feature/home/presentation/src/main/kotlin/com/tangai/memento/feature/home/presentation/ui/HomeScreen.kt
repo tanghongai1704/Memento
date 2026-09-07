@@ -2,7 +2,6 @@ package com.tangai.memento.feature.home.presentation.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,15 +11,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,10 +31,6 @@ import com.tangai.memento.feature.home.presentation.viewmodel.HomeViewModel
 
 @Composable
 fun HomeScreen(
-    onNavigateToConnection: () -> Unit,
-    onNavigateToHistory: () -> Unit,
-    onNavigateToCreatePost: () -> Unit,
-    onLogout: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -51,40 +43,15 @@ fun HomeScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            Row(
+            Text(
+                text = "Memento",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Memento",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Button(
-                    onClick = onNavigateToConnection,
-                    modifier = Modifier.padding(4.dp)
-                ) {
-                    Text("Connections")
-                }
-
-                Button(
-                    onClick = onNavigateToHistory,
-                    modifier = Modifier.padding(4.dp)
-                ) {
-                    Text("History")
-                }
-
-                Button(
-                    onClick = onLogout,
-                    modifier = Modifier.padding(4.dp)
-                ) {
-                    Text("Logout")
-                }
-            }
+            )
 
             LazyRow(
                 modifier = Modifier
@@ -145,14 +112,6 @@ fun HomeScreen(
             }
         }
 
-        FloatingActionButton(
-            onClick = onNavigateToCreatePost,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = "Create Post")
-        }
     }
 }
 

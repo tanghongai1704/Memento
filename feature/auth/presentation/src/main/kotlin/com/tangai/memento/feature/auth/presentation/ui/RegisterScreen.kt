@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,7 +63,11 @@ fun RegisterScreen(
         ) {
             Text(
                 text = "Register",
-                style = MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
