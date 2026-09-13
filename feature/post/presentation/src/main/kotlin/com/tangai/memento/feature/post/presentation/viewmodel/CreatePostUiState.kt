@@ -8,7 +8,10 @@ data class CreatePostUiState(
     val selectedRecipient: User? = null,
     val selectedMedia: List<MediaItem> = emptyList(),
     val isLoading: Boolean = false,
+    val isProcessing: Boolean = false,
     val isUploading: Boolean = false,
+    val processingProgress: Float = 0f,
     val uploadProgress: Float = 0f,
+    val processingMessage: String = "Preparing media...",
     val errorMessage: String? = null
 )

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -254,7 +255,9 @@ fun MementoNavGraph() {
                 }
 
                 composable(MementoRoute.CreatePost.route) {
+                    val createPostViewModel: com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel = hiltViewModel()
                     CreatePostScreen(
+                        viewModel = createPostViewModel,
                         onNavigateToMediaPicker = {
                             navController.navigate(MementoRoute.MediaPicker.route)
                         },
@@ -265,7 +268,12 @@ fun MementoNavGraph() {
                 }
 
                 composable(MementoRoute.MediaPicker.route) {
+                    val parentEntry = remember(navController) {
+                        navController.getBackStackEntry(MementoRoute.CreatePost.route)
+                    }
+                    val createPostViewModel: com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel = hiltViewModel(parentEntry)
                     MediaPickerScreen(
+                        viewModel = createPostViewModel,
                         onNavigateToPreview = {
                             navController.navigate(MementoRoute.MediaPreview.route)
                         },
@@ -276,7 +284,12 @@ fun MementoNavGraph() {
                 }
 
                 composable(MementoRoute.MediaPreview.route) {
+                    val parentEntry = remember(navController) {
+                        navController.getBackStackEntry(MementoRoute.CreatePost.route)
+                    }
+                    val createPostViewModel: com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel = hiltViewModel(parentEntry)
                     MediaPreviewScreen(
+                        viewModel = createPostViewModel,
                         onNavigateBack = {
                             navController.popBackStack()
                         },
