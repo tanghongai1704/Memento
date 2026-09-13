@@ -1,12 +1,14 @@
 package com.tangai.memento.domain.model
 
 data class MediaItem(
-    val uri: String,
-    val type: MediaType,
-    val displayName: String = "",
-    val originalSizeBytes: Long = 0L,
-    val processedSizeBytes: Long = 0L,
-    val compressionRatio: Float = 1f,
-    val processedUri: String? = null,
-    val thumbnailUri: String? = null
+    val mediaId: String,
+    val mediaType: MediaType,
+    val storagePath: String,
+    val thumbnailPath: String?,
+    val mimeType: String,
+    val width: Int,
+    val height: Int,
+    val durationMs: Long?,
+    val sizeBytes: Long,
+    val position: Int
 )

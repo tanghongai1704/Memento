@@ -7,7 +7,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.core.net.toUri
-import com.tangai.memento.domain.model.MediaItem
+import com.tangai.memento.domain.model.LocalMediaItem
 import com.tangai.memento.domain.model.MediaType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,7 +26,7 @@ object MediaProcessingPipeline {
         }
     }
 
-    suspend fun processMedia(context: Context, item: MediaItem): MediaItem = withContext(Dispatchers.IO) {
+    suspend fun processMedia(context: Context, item: LocalMediaItem): LocalMediaItem = withContext(Dispatchers.IO) {
         val originalSize = getFileSize(context.contentResolver, item.uri.toUri())
         val processed = when (item.type) {
             MediaType.IMAGE -> processImage(context, item, originalSize)
@@ -39,7 +39,7 @@ object MediaProcessingPipeline {
         )
     }
 
-    private fun processImage(context: Context, item: MediaItem, originalSize: Long): MediaItem {
+    private fun processImage(context: Context, item: LocalMediaItem, originalSize: Long): LocalMediaItem {
         val sourceStream = context.contentResolver.openInputStream(item.uri.toUri()) ?: return item.copy(
             processedSizeBytes = originalSize,
             compressionRatio = 1f
@@ -66,7 +66,7 @@ object MediaProcessingPipeline {
         )
     }
 
-    private fun processVideo(context: Context, item: MediaItem, originalSize: Long): MediaItem {
+    private fun processVideo(context: Context, item: LocalMediaItem, originalSize: Long): LocalMediaItem {
         val thumbnailFile = generateVideoThumbnail(context, item.uri.toUri())
         val processedSize = (originalSize * 0.68f).toLong().coerceAtLeast(1L)
         return item.copy(

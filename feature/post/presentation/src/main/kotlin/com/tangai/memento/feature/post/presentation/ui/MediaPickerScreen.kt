@@ -39,7 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.tangai.memento.domain.model.MediaItem
+import com.tangai.memento.domain.model.LocalMediaItem
 import com.tangai.memento.domain.model.MediaType
 import com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel
 
@@ -56,14 +56,14 @@ fun MediaPickerScreen(
     ) { uri ->
         if (uri != null) {
             val mediaType = MediaType.IMAGE
-            viewModel.addSelectedMedia(MediaItem(uri = uri.toString(), type = mediaType, displayName = "photo_${System.currentTimeMillis()}"))
+            viewModel.addSelectedMedia(LocalMediaItem(uri = uri.toString(), type = mediaType, displayName = "photo_${System.currentTimeMillis()}"))
         }
     }
     val multiplePhotoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
     ) { uris ->
         val items = uris.map { uri ->
-            MediaItem(uri = uri.toString(), type = MediaType.IMAGE, displayName = "photo_${System.currentTimeMillis()}")
+            LocalMediaItem(uri = uri.toString(), type = MediaType.IMAGE, displayName = "photo_${System.currentTimeMillis()}")
         }
         viewModel.addSelectedMedia(items)
     }
@@ -71,7 +71,7 @@ fun MediaPickerScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            viewModel.addSelectedMedia(MediaItem(uri = uri.toString(), type = MediaType.VIDEO, displayName = "video_${System.currentTimeMillis()}"))
+            viewModel.addSelectedMedia(LocalMediaItem(uri = uri.toString(), type = MediaType.VIDEO, displayName = "video_${System.currentTimeMillis()}"))
         }
     }
 

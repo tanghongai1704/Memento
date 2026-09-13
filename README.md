@@ -1,44 +1,34 @@
 # Memento
 
-Memento là ứng dụng Android chia sẻ media **1-1** giữa hai người dùng, xây theo hướng multi-module và Clean Architecture.
+Ứng dụng Android chia sẻ ảnh/video trong connection DIRECT hoặc GROUP, dùng Kotlin, Compose, Hilt, Firebase và Room.
 
-## Hiện trạng dự án
+## Trạng thái hiện tại
 
-- Có các flow chính: **Auth, Home, Connection, Create Post, History**
-- UI dùng **Jetpack Compose**
-- Kiến trúc theo layer: **presentation → domain → data**
-- Data hiện tại đang dùng **Fake Repository** để hoàn thiện luồng MVP
+- Auth email/password thật; tạo/khôi phục profile tại `users/{Firebase Auth UID}` và cache Room.
+- Connection đọc Firestore theo `memberIds`, cache connection/members trong một Room transaction. Search username chính xác, tối đa 20 kết quả.
+- Home/History đọc cache Room. Home chọn All hoặc connection; không còn dữ liệu mẫu.
+- Model/Room đã chuẩn bị cho invite, post và metadata media. UI picker/nén media vẫn hoạt động.
+- Chưa triển khai tạo/redeem/revoke invite, đồng bộ/pagination post, upload Storage, retry/cleanup hoặc chỉnh sửa profile. Nút đăng bài báo chưa khả dụng; không báo upload thành công giả.
+- Luồng gửi/duyệt connection request cũ đã gỡ. Chưa có cách tạo connection mới trên UI cho đến khi triển khai invite.
 
-## Công nghệ chính
+## Chạy và kiểm tra
 
-- Kotlin, Coroutines
-- Jetpack Compose, Navigation Compose, Material 3
-- Hilt (DI)
-- Room (module nền tảng)
-- Firebase SDK (đã cấu hình dependency trong project)
+Mở bằng Android Studio với Android SDK 37. Gradle daemon dùng JDK 25 theo `gradle/gradle-daemon-jvm.properties`; Java source compatibility là 11.
+Cần cấu hình Firebase riêng của dự án, bật Email/Password và Firestore.
 
-## Cấu trúc module
-
-```text
-app
-core/
-  common, domain, ui, designsystem, database, network, media
-feature/
-  auth/{domain,data,presentation}
-  home/{domain,data,presentation}
-  connection/{domain,data,presentation}
-  post/{domain,data,presentation}
-  history/{domain,data,presentation}
+```sh
+./gradlew :app:assembleDebug
+python3 tools/check_schema.py
+./gradlew :core:domain:test
+firebase emulators:exec --only firestore --project demo-memento-schema "python3 tools/check_firestore_rules.py"
 ```
 
-## Chạy dự án
+Rules/index trong repo là cấu hình chuẩn bị, chưa được deploy tự động. Đọc phần chuyển đổi dữ liệu trước khi dùng với Firebase đã có dữ liệu cũ.
 
-1. Mở project bằng Android Studio (JDK 11+).
-2. Sync Gradle.
-3. Chạy module `app` trên emulator hoặc thiết bị thật.
+## Tài liệu
 
-## Ghi chú
-
-- `docs/architecture.md`: mô tả kiến trúc chi tiết.
-- `docs/differentiating-feature.md`: mô tả differentiating feature **Moment Recap**.
-- `docs/register-firebase-auth.md`: mô tả đầy đủ flow Register Email/Password qua Firebase Auth + Firestore + Room.
+- [Schema và kế hoạch invite](docs/data-schema.md)
+- [Kiến trúc](docs/architecture.md)
+- [Auth và profile](docs/register-firebase-auth.md)
+- [Luồng sản phẩm](docs/mvp-user-flow.md)
+- [Moment Recap — đề xuất](docs/differentiating-feature.md)

@@ -27,13 +27,14 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            val postsResult = homeRepository.loadPosts()
             val connectionsResult = homeRepository.loadConnections()
+            val postsResult = homeRepository.loadPosts()
 
             _uiState.value = _uiState.value.copy(
                 posts = postsResult.getOrElse { emptyList() },
                 connections = connectionsResult.getOrElse { emptyList() },
-                isLoading = false
+                isLoading = false,
+                errorMessage = postsResult.exceptionOrNull()?.message ?: connectionsResult.exceptionOrNull()?.message
             )
         }
     }
@@ -46,22 +47,6 @@ class HomeViewModel @Inject constructor(
         return homeRepository.getFilteredPosts(_uiState.value.posts, _uiState.value.selectedFilter)
     }
 
-    fun getPostLabel(post: Post, currentUserId: String = "user_current"): String {
-        val sender = if (post.authorId == currentUserId) "You" else getUsername(post.authorId)
-        val recipient = getUsername(post.audienceId)
-        return "$sender → $recipient"
-    }
-
-    private fun getUsername(userId: String): String {
-        return _uiState.value.connections.find { it.id == userId }?.username ?: "Unknown"
-    }
-
-    fun addPost(post: Post) {
-        val result = homeRepository.addPost(post)
-        if (result.isSuccess) {
-            _uiState.value = _uiState.value.copy(
-                posts = listOf(post) + _uiState.value.posts
-            )
-        }
-    }
+    fun getPostLabel(post: Post): String =
+        _uiState.value.connections.find { it.id == post.connectionId }?.name ?: "Direct connection"
 }

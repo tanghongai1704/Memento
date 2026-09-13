@@ -7,7 +7,6 @@ import com.tangai.memento.database.MementoDatabase
 import com.tangai.memento.database.dao.UserDao
 import com.tangai.memento.database.dao.ConnectionDao
 import com.tangai.memento.database.dao.ConnectionMemberDao
-import com.tangai.memento.database.dao.ConnectionRequestDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,7 +28,7 @@ object DatabaseModule {
             MementoDatabase::class.java,
             "memento.db"
         )
-            .fallbackToDestructiveMigration()
+            .addMigrations(com.tangai.memento.database.MIGRATION_2_3)
             .build()
     }
 
@@ -42,6 +41,4 @@ object DatabaseModule {
     @Provides
     fun provideConnectionMemberDao(database: MementoDatabase): ConnectionMemberDao = database.connectionMemberDao()
 
-    @Provides
-    fun provideConnectionRequestDao(database: MementoDatabase): ConnectionRequestDao = database.connectionRequestDao()
 }

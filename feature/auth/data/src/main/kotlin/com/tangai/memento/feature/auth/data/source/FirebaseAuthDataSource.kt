@@ -46,6 +46,8 @@ class FirebaseAuthDataSource @Inject constructor(
         }.mapError()
     }
 
+    fun currentUser(): FirebaseUser? = firebaseAuth.currentUser
+
     fun logout() {
         firebaseAuth.signOut()
     }

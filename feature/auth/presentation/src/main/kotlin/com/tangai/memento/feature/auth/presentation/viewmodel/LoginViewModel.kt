@@ -52,13 +52,6 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val result = authRepository.login(account, password)
-            if (result.isSuccess) {
-                authRepository.syncUsers().onFailure {
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = it.message ?: "Failed to sync users"
-                    )
-                }
-            }
             _uiState.value = _uiState.value.copy(isLoading = false)
             if (result.isSuccess) {
                 onSuccess()

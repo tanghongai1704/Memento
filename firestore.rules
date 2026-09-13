@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function profileFields(d) {
+      return d.keys().hasAll(['displayName', 'username', 'usernameNormalized', 'avatarPath',
+          'bio', 'createdAt', 'updatedAt', 'schemaVersion'])
+        && d.keys().hasOnly(['displayName', 'username', 'usernameNormalized', 'avatarPath',
+          'bio', 'createdAt', 'updatedAt', 'schemaVersion']);
+    }
+    function validProfile(d) {
+      return profileFields(d)
+        && d.displayName is string && d.displayName.size() > 0 && d.displayName.size() <= 100
+        && d.username is string && d.username.size() > 0 && d.username.size() <= 100
+        && d.usernameNormalized is string && d.usernameNormalized.size() > 0
+        && d.usernameNormalized.size() <= 100
+        && (d.avatarPath == null || (d.avatarPath is string && d.avatarPath.size() <= 1024))
+        && (d.bio == null || (d.bio is string && d.bio.size() <= 500))
+        && d.createdAt is timestamp && d.updatedAt == request.time && d.schemaVersion == 1;
+    }
+    function activeMember(connectionId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/connections/$(connectionId)).data.status == 'ACTIVE'
+        && request.auth.uid in get(/databases/$(database)/documents/connections/$(connectionId)).data.memberIds
+        && get(/databases/$(database)/documents/connections/$(connectionId)/members/$(request.auth.uid)).data.status == 'ACTIVE';
+    }
+    match /users/{uid} {
+      allow get: if signedIn();
+      allow list: if signedIn() && request.query.limit != null && request.query.limit <= 20;
+      allow create: if signedIn() && request.auth.uid == uid && validProfile(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      allow update: if signedIn() && request.auth.uid == uid && validProfile(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+    match /connections/{connectionId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.memberIds && resource.data.status == 'ACTIVE';
+      allow write: if false; // Enable only with verified invite/membership transaction rules or backend.
+      match /members/{uid} {
+        allow read: if activeMember(connectionId);
+        allow write: if false;
+      }
+      match /posts/{postId} {
+        allow read, write: if false; // History visibility and the post pipeline are not implemented yet.
+      }
+    }
+    match /invites/{codeHash} {
+      allow get: if signedIn();
+      allow list, write: if false;
+    }
+  }
+}

@@ -5,7 +5,7 @@ import com.tangai.memento.domain.model.User
 interface AuthRepository {
     suspend fun login(account: String, password: String): Result<Unit>
     suspend fun signUp(email: String, password: String): Result<User>
-    suspend fun syncUsers(): Result<Unit>
+    suspend fun syncCurrentUserProfile(): Result<Unit>
     fun logout()
     fun isUserLoggedIn(): Boolean
 }

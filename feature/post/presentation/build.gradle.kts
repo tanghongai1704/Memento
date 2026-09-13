@@ -25,6 +25,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":feature:connection:domain"))
     implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:ui"))

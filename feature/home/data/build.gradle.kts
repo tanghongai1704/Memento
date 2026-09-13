@@ -18,6 +18,9 @@ android {
 }
 
 dependencies {
+    implementation(project(":feature:connection:domain"))
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
     implementation(project(":core:domain"))
     implementation(project(":core:database"))
     implementation(project(":core:network"))

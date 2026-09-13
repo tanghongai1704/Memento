@@ -4,6 +4,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.tangai.memento.database.dao.UserDao
 import com.tangai.memento.database.model.toEntity
+import com.tangai.memento.database.model.toDomain
+import com.tangai.memento.feature.auth.data.mapper.toProfile
 import com.tangai.memento.domain.model.User
 import com.tangai.memento.feature.auth.data.mapper.toDomainUser
 import com.tangai.memento.feature.auth.data.model.AuthDataError
@@ -23,7 +25,7 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun login(account: String, password: String): Result<Unit> {
         return firebaseAuthDataSource.login(account, password).fold(
-            onSuccess = { Result.success(Unit) },
+            onSuccess = { syncCurrentUserProfile().onFailure { firebaseAuthDataSource.logout() } },
             onFailure = { Result.failure(it.toRegisterException()) }
         )
     }
@@ -32,40 +34,51 @@ class AuthRepositoryImpl @Inject constructor(
         return firebaseAuthDataSource.signUp(email, password).fold(
             onSuccess = { firebaseUser ->
                 runCatching {
-                    val user = firebaseUser.toDomainUser()
-                    createUserProfile(user)
-                    userDao.upsertUser(user.toEntity())
-                    user
+                    syncCurrentUserProfile().getOrThrow()
+                    userDao.getUserById(firebaseUser.uid)!!.toDomain()
+
                 }.fold(
                     onSuccess = { Result.success(it) },
-                    onFailure = { Result.failure(it.toRegisterException()) }
+                    onFailure = {
+                        firebaseAuthDataSource.logout()
+                        Result.failure(RegisterException(RegisterError.Unknown(
+                            "Account created, but profile setup failed. Sign in again to retry profile setup.")))
+                    }
                 )
             },
             onFailure = { Result.failure(it.toRegisterException()) }
         )
     }
 
-    override suspend fun syncUsers(): Result<Unit> = runCatching {
-        val snapshot = firestore
-            .collection("users")
-            .get()
-            .awaitTask()
-
-        snapshot.documents.mapNotNull { document ->
-            val uid = document.getString("uid") ?: document.id
-            val email = document.getString("email")
-                ?: document.getString("account")
-                ?: document.getString("mail")
-                ?: ""
-            val username = document.getString("username")
-                ?: document.getString("displayName")
-                ?: document.getString("name")
-                ?: ""
-            if (uid.isBlank() || email.isBlank()) return@mapNotNull null
-            User(id = uid, username = username.ifBlank { email }, email = email)
-        }.forEach { user ->
-            userDao.upsertUser(user.toEntity())
-        }
+    override suspend fun syncCurrentUserProfile(): Result<Unit> = runCatching {
+        val authUser = firebaseAuthDataSource.currentUser()
+            ?: error("User is not signed in.")
+        val fallback = authUser.toDomainUser()
+        val ref = firestore.collection("users").document(authUser.uid)
+        // Idempotent recovery after Auth succeeds but the profile write fails.
+        firestore.runTransaction { tx ->
+            val existing = tx.get(ref)
+            val username = existing.getString("username")?.takeIf { it.isNotBlank() } ?: fallback.username
+            val normalized = com.tangai.memento.domain.model.normalizeUsername(username)
+            val fields = setOf("displayName", "username", "usernameNormalized", "avatarPath", "bio",
+                "createdAt", "updatedAt", "schemaVersion")
+            if (!existing.exists() || existing.data?.keys != fields ||
+                existing.getString("usernameNormalized") != normalized) {
+                tx.set(ref, mapOf(
+                    "displayName" to (existing.getString("displayName") ?: username),
+                    "username" to username,
+                    "usernameNormalized" to normalized,
+                    "avatarPath" to existing.getString("avatarPath"),
+                    "bio" to existing.getString("bio"),
+                    "createdAt" to (existing.getTimestamp("createdAt") ?: FieldValue.serverTimestamp()),
+                    "updatedAt" to FieldValue.serverTimestamp(),
+                    "schemaVersion" to 1
+                ))
+            }
+        }.awaitTask()
+        val profile = ref.get().awaitTask().toProfile() ?: error("Invalid user profile.")
+        check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) { "Account changed during sync." }
+        userDao.upsertUser(profile.toEntity())
     }
 
     override fun logout() {
@@ -74,20 +87,6 @@ class AuthRepositoryImpl @Inject constructor(
 
     override fun isUserLoggedIn(): Boolean {
         return firebaseAuthDataSource.isUserLoggedIn()
-    }
-
-    private suspend fun createUserProfile(user: User) {
-        val payload = mapOf(
-            "uid" to user.id,
-            "email" to user.email,
-            "username" to user.username,
-            "createdAt" to FieldValue.serverTimestamp()
-        )
-        firestore
-            .collection("users")
-            .document(user.id)
-            .set(payload)
-            .awaitTask()
     }
 
     private fun Throwable.toRegisterException(): RegisterException {

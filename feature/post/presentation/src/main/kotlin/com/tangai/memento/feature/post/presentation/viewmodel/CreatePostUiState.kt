@@ -1,12 +1,12 @@
 package com.tangai.memento.feature.post.presentation.viewmodel
 
-import com.tangai.memento.domain.model.MediaItem
-import com.tangai.memento.domain.model.User
+import com.tangai.memento.domain.model.LocalMediaItem
+import com.tangai.memento.domain.model.Connection
 
 data class CreatePostUiState(
-    val recipients: List<User> = emptyList(),
-    val selectedRecipient: User? = null,
-    val selectedMedia: List<MediaItem> = emptyList(),
+    val recipients: List<Connection> = emptyList(),
+    val selectedRecipient: Connection? = null,
+    val selectedMedia: List<LocalMediaItem> = emptyList(),
     val isLoading: Boolean = false,
     val isProcessing: Boolean = false,
     val isUploading: Boolean = false,

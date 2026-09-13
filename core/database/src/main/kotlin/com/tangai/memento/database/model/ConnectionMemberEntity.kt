@@ -27,13 +27,17 @@ data class ConnectionMemberEntity(
     val userId: String,
     val role: String,
     val joinedAt: Long,
-    val status: String
+    val status: String,
+    val leftAt: Long? = null,
+    val invitedBy: String? = null,
+    val removedBy: String? = null
 )
 
 fun ConnectionMemberEntity.toDomain(): ConnectionMember = ConnectionMember(
     userId = userId,
     role = role,
     joinedAt = joinedAt,
+    leftAt = leftAt, invitedBy = invitedBy, removedBy = removedBy,
     status = MemberStatus.valueOf(status)
 )
 
@@ -42,5 +46,6 @@ fun ConnectionMember.toEntity(connectionId: String): ConnectionMemberEntity = Co
     userId = userId,
     role = role,
     joinedAt = joinedAt,
+    leftAt = leftAt, invitedBy = invitedBy, removedBy = removedBy,
     status = status.name
 )

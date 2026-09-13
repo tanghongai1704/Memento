@@ -123,7 +123,7 @@ fun MediaPreviewScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Recipient: ${uiState.selectedRecipient?.username ?: "Unknown"}",
+                text = "Connection: ${uiState.selectedRecipient?.name ?: "Direct connection"}",
                 fontSize = 16.sp
             )
 

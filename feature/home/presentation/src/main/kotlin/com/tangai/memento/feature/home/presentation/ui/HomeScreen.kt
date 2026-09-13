@@ -69,10 +69,10 @@ fun HomeScreen(
                 items(uiState.connections) { connection ->
                     Spacer(modifier = Modifier.width(8.dp))
                     FilterChip(
-                        label = connection.username,
-                        selected = (uiState.selectedFilter is FeedFilter.User &&
-                                (uiState.selectedFilter as FeedFilter.User).userId == connection.id),
-                        onClick = { viewModel.onFilterSelected(FeedFilter.User(connection.id)) }
+                        label = connection.name ?: "Direct connection",
+                        selected = (uiState.selectedFilter is FeedFilter.Connection &&
+                                (uiState.selectedFilter as FeedFilter.Connection).connectionId == connection.id),
+                        onClick = { viewModel.onFilterSelected(FeedFilter.Connection(connection.id)) }
                     )
                 }
             }
@@ -160,7 +160,7 @@ fun PostCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "[${post.mediaType.name} placeholder]",
+                text = "[${post.postType.name} placeholder]",
                 style = MaterialTheme.typography.bodyMedium
             )
         }

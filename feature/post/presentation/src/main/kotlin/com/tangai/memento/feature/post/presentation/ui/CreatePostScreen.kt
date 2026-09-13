@@ -83,7 +83,7 @@ fun CreatePostScreen(
                             modifier = Modifier.padding(16.dp)
                         ) {
                             Text(
-                                text = user.username,
+                                text = user.name ?: "Direct connection",
                                 fontSize = 18.sp
                             )
                             if (isSelected) {
