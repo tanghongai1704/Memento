@@ -35,7 +35,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.tangai.memento.core.designsystem.theme.MementoTheme
 import com.tangai.memento.feature.auth.presentation.ui.ForgotPasswordScreen
 import com.tangai.memento.feature.auth.presentation.ui.LoginScreen

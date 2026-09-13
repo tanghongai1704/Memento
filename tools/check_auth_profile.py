@@ -50,6 +50,7 @@ def create_profile(uid, token, label):
 
 suffix = str(time.time_ns())
 accounts = []
+emails = []
 for label in ['Alice', 'Bob']:
     credentials = {'email': f'{label.lower()}-{suffix}@example.test',
         'password': 'EmulatorOnly-123!', 'returnSecureToken': True}
@@ -62,10 +63,17 @@ for label in ['Alice', 'Bob']:
     after = request(FIRESTORE + '/' + DOCUMENTS + '/users/' + signed_in['localId'], token=signed_in['idToken'])
     assert before['fields'] == after['fields'], 'Login must not reset a profile'
     accounts.append(signed_in)
+    emails.append(credentials['email'])
+
+reset = request(AUTH + '/accounts:sendOobCode?key=emulator-only', {
+    'requestType': 'PASSWORD_RESET',
+    'email': emails[0]
+})
+assert reset['email'] == emails[0]
 
 request(FIRESTORE + '/' + DOCUMENTS + ':commit', {'writes': [{
     'update': {'name': DOCUMENTS + '/users/' + accounts[0]['localId'],
         'fields': {'displayName': {'stringValue': 'Not allowed'}}},
     'updateMask': {'fieldPaths': ['displayName']}}]}, accounts[1]['idToken'], expected=403)
 request(FIRESTORE + '/' + DOCUMENTS + '/users/' + accounts[0]['localId'], expected=403)
-print(f'Auth/Profile: two accounts registered and signed in; {checks} checks passed (emulators only).')
+print(f'Auth/Profile: two accounts registered and signed in, password reset requested; {checks} checks passed (emulators only).')

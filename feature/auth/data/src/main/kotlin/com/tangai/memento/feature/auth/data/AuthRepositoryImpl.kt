@@ -15,6 +15,7 @@ import com.tangai.memento.feature.auth.data.source.util.awaitTask
 import com.tangai.memento.feature.auth.domain.AuthRepository
 import com.tangai.memento.feature.auth.domain.model.RegisterError
 import com.tangai.memento.feature.auth.domain.model.RegisterException
+import com.tangai.memento.feature.auth.domain.model.ProfileValidator
 import javax.inject.Inject
 
 class AuthRepositoryImpl @Inject constructor(
@@ -80,6 +81,68 @@ class AuthRepositoryImpl @Inject constructor(
         check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) { "Account changed during sync." }
         userDao.upsertUser(profile.toEntity())
     }
+
+    override suspend fun getCurrentUserProfile(): Result<User> = runCatching {
+        val authUser = firebaseAuthDataSource.currentUser()
+            ?: error("User is not signed in.")
+        val profile = firestore.collection("users")
+            .document(authUser.uid)
+            .get()
+            .awaitTask()
+            .toProfile()
+            ?: error("User profile is missing.")
+        check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) {
+            "Account changed while loading profile."
+        }
+        userDao.upsertUser(profile.toEntity())
+        profile
+    }
+
+    override suspend fun updateCurrentUserProfile(
+        displayName: String,
+        username: String,
+        bio: String?
+    ): Result<User> = runCatching {
+        val cleanDisplayName = displayName.trim()
+        val cleanUsername = username.trim()
+        val cleanBio = bio?.trim()?.takeIf { it.isNotEmpty() }
+        val validation = ProfileValidator.validate(
+            displayName = cleanDisplayName,
+            username = cleanUsername,
+            bio = cleanBio.orEmpty()
+        )
+        require(validation.isValid) {
+            validation.displayNameError ?: validation.usernameError ?: validation.bioError
+                ?: "Invalid profile."
+        }
+
+        val authUser = firebaseAuthDataSource.currentUser()
+            ?: error("User is not signed in.")
+        val ref = firestore.collection("users").document(authUser.uid)
+        firestore.runTransaction { transaction ->
+            val existing = transaction.get(ref)
+            require(existing.exists()) { "User profile is missing." }
+            transaction.set(ref, mapOf(
+                "displayName" to cleanDisplayName,
+                "username" to cleanUsername,
+                "usernameNormalized" to com.tangai.memento.domain.model.normalizeUsername(cleanUsername),
+                "avatarPath" to existing.getString("avatarPath"),
+                "bio" to cleanBio,
+                "createdAt" to requireNotNull(existing.getTimestamp("createdAt")),
+                "updatedAt" to FieldValue.serverTimestamp(),
+                "schemaVersion" to 1
+            ))
+        }.awaitTask()
+        check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) {
+            "Account changed while saving profile."
+        }
+        getCurrentUserProfile().getOrThrow()
+    }
+
+    override suspend fun sendPasswordResetEmail(email: String): Result<Unit> =
+        firebaseAuthDataSource.sendPasswordResetEmail(email)
+
+    override fun currentUserEmail(): String? = firebaseAuthDataSource.currentUser()?.email
 
     override fun logout() {
         firebaseAuthDataSource.logout()

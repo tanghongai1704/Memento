@@ -11,9 +11,10 @@ service cloud.firestore {
     function validProfile(d) {
       return profileFields(d)
         && d.displayName is string && d.displayName.size() > 0 && d.displayName.size() <= 100
-        && d.username is string && d.username.size() > 0 && d.username.size() <= 100
-        && d.usernameNormalized is string && d.usernameNormalized.size() > 0
-        && d.usernameNormalized.size() <= 100
+        && d.username is string && d.username.size() >= 2 && d.username.size() <= 30
+        && d.username.matches('^[A-Za-z0-9][A-Za-z0-9._]{1,29}$')
+        && d.usernameNormalized is string
+        && d.usernameNormalized == d.username.lower()
         && (d.avatarPath == null || (d.avatarPath is string && d.avatarPath.size() <= 1024))
         && (d.bio == null || (d.bio is string && d.bio.size() <= 500))
         && d.createdAt is timestamp && d.updatedAt == request.time && d.schemaVersion == 1;

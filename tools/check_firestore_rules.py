@@ -48,9 +48,14 @@ def profile(uid, display='Alice'):
 call(':commit', 'a', {'writes': [profile('a')]})
 original = call('/users/a', 'a')
 update = profile('a', 'Updated name')
+update['update']['fields']['username'] = {'stringValue': 'Alice.2'}
+update['update']['fields']['usernameNormalized'] = {'stringValue': 'alice.2'}
 update['update']['fields']['createdAt'] = original['fields']['createdAt']
 update['updateTransforms'] = [t for t in update['updateTransforms'] if t['fieldPath'] == 'updatedAt']
 call(':commit', 'a', {'writes': [update]})
+invalid_normalization = profile('a')
+invalid_normalization['update']['fields']['usernameNormalized'] = {'stringValue': 'not-alice'}
+call(':commit', 'a', {'writes': [invalid_normalization]}, expected=403)
 call('/users/a', expected=403)
 call(':commit', 'b', {'writes': [profile('a', 'Hacked')]}, expected=403)
 call(':commit', 'a', {'writes': [profile('a', 'x' * 501)]}, expected=403)
@@ -75,4 +80,4 @@ call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'connectio
         {'fieldFilter': {'field': {'fieldPath': 'memberIds'}, 'op': 'ARRAY_CONTAINS', 'value': {'stringValue': 'a'}}},
         {'fieldFilter': {'field': {'fieldPath': 'status'}, 'op': 'EQUAL', 'value': {'stringValue': 'ACTIVE'}}}]}},
     'orderBy': [{'field': {'fieldPath': 'lastPostAt'}, 'direction': 'DESCENDING'}]}})
-print('Firestore rules: 16 access/validation checks passed (local demo emulator).')
+print('Firestore rules: 17 access/validation checks passed (local demo emulator).')

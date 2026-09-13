@@ -5,7 +5,7 @@ Firestore dùng Timestamp cho thời gian server; domain/Room dùng epoch millis
 ## users/{uid}
 
 `displayName: String`, `username: String`, `usernameNormalized: String`, `avatarPath: String?`, `bio: String?`, `createdAt: Timestamp`, `updatedAt: Timestamp`, `schemaVersion: Number`.
-UID = Firebase Auth UID. Không lưu email, uid field, friendList hoặc connection snapshots. Chuẩn hóa username bỏ toàn bộ whitespace + lowercase Locale.ROOT (chặt hơn ví dụ trim trong thảo luận). Search exact `whereEqualTo(usernameNormalized, normalized).limit(20)`; lookup UID dùng document get. Không cam kết username unique. Bio tối đa 500, tên/username tối đa 100 ký tự.
+UID = Firebase Auth UID. Không lưu email, uid field, friendList hoặc connection snapshots. Username dài 2–30 ký tự, bắt đầu bằng chữ/số, chỉ gồm chữ Latin/số/`.`/`_`; `usernameNormalized` bằng lowercase Locale.ROOT và được Rules kiểm tra. Search exact `whereEqualTo(usernameNormalized, normalized).limit(20)`; lookup UID dùng document get. Không cam kết username unique. Bio tối đa 500, displayName tối đa 100 ký tự.
 
 ## invites/{codeHash}
 

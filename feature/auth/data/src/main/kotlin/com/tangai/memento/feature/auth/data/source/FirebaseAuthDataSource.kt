@@ -46,6 +46,15 @@ class FirebaseAuthDataSource @Inject constructor(
         }.mapError()
     }
 
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return runCatching {
+            firebaseAuth
+                .sendPasswordResetEmail(email.trim())
+                .awaitTask()
+            Unit
+        }.mapUnitError()
+    }
+
     fun currentUser(): FirebaseUser? = firebaseAuth.currentUser
 
     fun logout() {

@@ -29,6 +29,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:ui"))
     implementation(project(":feature:home:domain"))
+    implementation(project(":feature:auth:domain"))
     
     implementation(libs.androidx.core.ktx)
     implementation(platform(libs.androidx.compose.bom))

@@ -10,11 +10,12 @@ MVP ưu tiên DIRECT, PHOTO, SINGLE. Có nhiều connection direct, mỗi cặp 
 
 ## Profile (bước 2)
 
-- displayName và username: 1–100 ký tự; không chấp nhận tên chỉ có whitespace.
-- usernameNormalized: bỏ whitespace, lowercase Locale.ROOT; dùng cùng hàm khi ghi và tìm kiếm.
+- displayName: 1–100 ký tự sau trim; không chấp nhận tên chỉ có whitespace.
+- username: 2–30 ký tự, bắt đầu bằng chữ/số; chỉ gồm chữ Latin, số, dấu chấm hoặc gạch dưới.
+- usernameNormalized bằng username lowercase Locale.ROOT; dữ liệu sai chuẩn bị Rules từ chối.
 - bio: nullable, tối đa 500 ký tự.
 - Email/password ở Firebase Auth. Profile công khai không có email, uid field hoặc friendList.
-- Profile tối thiểu: hiển thị tên thật từ dữ liệu, sửa displayName/username/bio và reset password. Avatar upload làm cùng hạ tầng Storage sau, không chặn MVP ảnh.
+- Profile tối thiểu đã hoàn thành ở bước 2: hiển thị dữ liệu thật, sửa displayName/username/bio và reset password. Avatar upload làm cùng hạ tầng Storage sau, không chặn MVP ảnh.
 - Không công bố khởi động offline đã hoàn thiện: Splash hiện cần mạng. Cải thiện session/cache thuộc bước 7.
 
 ## Direct invite (bước 3)

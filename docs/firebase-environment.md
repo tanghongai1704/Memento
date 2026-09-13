@@ -19,6 +19,8 @@ Không đặt default project cho CLI: lệnh thay đổi remote phải ghi `--p
 
 Cả 3 profile đã migrate và kiểm tra lại; tài khoản Auth giữ nguyên. Firestore Rules đã deploy và khớp file repo. Hai composite indexes connections/posts đều READY. Probe users không đăng nhập trả 403. Storage Rules remote giữ nguyên deny-all; file local có cùng chính sách. Backup trước và báo cáo sau nằm trong `.local/firebase-audit/` và `.local/firebase-audit/after-step1/`.
 
+Bước 2 đã deploy Rules validation username chặt hơn và xác nhận remote khớp repo. Snapshot kiểm tra sau bước 2 nằm trong `.local/firebase-audit/after-step2/`. Profile edit và password reset được kiểm tra bằng Emulator; không gửi reset mail tới tài khoản thật.
+
 ## File nên commit
 
 `.firebaserc`, `firebase.json`, `firestore.rules`, `firestore.indexes.json`, `storage.rules`, các script test và docs. Không commit `.local/`, `.firebase/`, log, credential hoặc backup dữ liệu user.

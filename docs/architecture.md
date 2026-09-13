@@ -5,7 +5,7 @@
 
 ## Luồng dữ liệu
 
-AuthRepository → Firebase Auth → transaction profile → UserDao. Login chỉ thành công sau khi profile sẵn sàng.
+AuthRepository → Firebase Auth → transaction profile → UserDao. Login chỉ thành công sau khi profile sẵn sàng. ProfileViewModel cũng dùng AuthRepository để đọc/sửa profile; Firestore là nguồn xác nhận và Room được cập nhật sau khi remote thành công. ForgotPasswordViewModel gọi Firebase Auth qua cùng repository.
 ConnectionRepository → truy vấn Firestore có membership → transaction Room cập nhật connection/members. Profile của thành viên được đọc trực tiếp theo UID.
 HomeRepository/HistoryRepository → Room, không truy vấn Firestore từ Compose. Home lọc theo connectionId. PostDao hỗ trợ All/My/Received, loại media và khoảng thời gian.
 

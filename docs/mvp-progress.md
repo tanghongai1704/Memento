@@ -7,8 +7,8 @@
 | Bước | Nội dung | Trạng thái |
 |---|---|---|
 | 1 | Môi trường Firebase, dữ liệu cũ, Rules/index và quy tắc MVP | Hoàn tất — 13/09/2026 |
-| 2 | Auth/profile tối thiểu và quên mật khẩu | Tiếp theo |
-| 3 | Direct invite và transaction chống trùng | Chưa bắt đầu |
+| 2 | Auth/profile tối thiểu và quên mật khẩu | Hoàn tất — 13/09/2026 |
+| 3 | Direct invite và transaction chống trùng | Tiếp theo |
 | 4 | Đăng một ảnh thật: Room → Storage → Firestore | Chưa bắt đầu |
 | 5 | Đồng bộ người nhận, Home, pagination | Chưa bắt đầu |
 | 6 | History, soft delete và disconnect | Chưa bắt đầu |
@@ -54,3 +54,33 @@ Invite, upload/post sync và quyền Storage media chưa triển khai. Home tr�
 ### Tiếp theo — bước 2
 
 Hiển thị profile từ Room, chỉnh sửa displayName/username/bio qua repository; validation đồng nhất; gửi email reset password; kiểm tra đăng ký/login lỗi profile và chuyển tài khoản. Avatar upload chờ hạ tầng Storage. Không bắt đầu invite trước khi chốt bước 2.
+
+## 13/09/2026 — bước 2
+
+### Đã làm
+
+- Profile screen tải profile hiện tại từ Firestore, cập nhật cache Room và hiển thị email read-only từ Firebase Auth.
+- Cho sửa displayName, username và bio. Sau khi transaction Firestore hoàn tất, app đọc lại document và chỉ khi đó cập nhật Room/UI.
+- Validation dùng chung ở presentation và repository: displayName 1–100 ký tự; username 2–30 ký tự, bắt đầu bằng chữ/số và chỉ dùng chữ Latin, số, `.` hoặc `_`; bio tối đa 500 ký tự.
+- Rules thật kiểm tra cùng giới hạn và bắt buộc `usernameNormalized == username.lower()`, tránh client ghi cặp username/search key không nhất quán.
+- Username mặc định sau đăng ký được lọc từ phần trước `@`; nếu không đủ điều kiện, dùng fallback ổn định từ UID.
+- Thay màn hình Forgot Password placeholder bằng form gọi Firebase Auth gửi email reset, có validation, loading, lỗi và thông báo chung sau khi gửi.
+- Cập nhật API AuthRepository cho đọc/sửa profile, reset password và email tài khoản; thay các import Hilt Compose đã deprecated.
+
+### Bằng chứng kiểm tra
+
+- Android debug build thành công; Hilt/Compose và toàn bộ module compile.
+- 2 unit tests ProfileValidator đạt; unit test username nền trước vẫn đạt.
+- Firestore Emulator: 17 kiểm tra Rules đạt, gồm trường hợp từ chối usernameNormalized giả.
+- Auth + Firestore Emulator: 13 kiểm tra đạt với hai tài khoản, đăng ký/đăng nhập lại, giữ profile, gửi password reset, chặn sửa chéo và chặn truy cập không đăng nhập.
+- Firestore Rules mới đã deploy lên `memento-fre` và nội dung remote khớp file repo. Đọc lại xác nhận 3 profile vẫn đúng schema; 3 tài khoản Auth vẫn hoạt động; hai index vẫn READY.
+
+### Chốt bước 2
+
+Auth/profile tối thiểu đã có implementation thật. Người dùng có thể đăng ký, đăng nhập, xem/sửa profile, đăng xuất và yêu cầu email reset password. Username vẫn được phép trùng theo schema; invite là cơ chế kết nối chính.
+
+Chưa gửi email reset tới tài khoản thật trong quá trình tự động để tránh làm phiền; đường đi đã được kiểm tra trên Auth Emulator. Chưa kiểm thử UI thủ công trên thiết bị, giao diện chưa có avatar và Splash vẫn cần mạng. Các phần này không chặn bước direct invite; avatar và offline recovery nằm ở bước 4/7.
+
+### Tiếp theo — bước 3
+
+Triển khai direct invite end-to-end: Callable Cloud Function tạo/redeem/revoke code, transaction tạo connection/member và lock chống direct trùng, giới hạn thử sai, Rules/App Check phù hợp, UI tạo/nhập/chia sẻ code và test concurrent redeem. Không mở quyền client ghi trực tiếp connection/member/invite.
