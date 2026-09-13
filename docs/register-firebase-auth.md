@@ -14,7 +14,7 @@ Form hiện nhận email/password; username mặc định là phần trước @ 
 
 `syncCurrentUserProfile` chỉ đọc chính user; không tải cả collection users. Username được bỏ toàn bộ whitespace và lowercase bằng Locale.ROOT; search dùng cùng hàm, không tìm theo email/UID hay contains.
 
-Rules chỉ cho chủ UID tạo/cập nhật profile, kiểm tra kiểu và giới hạn displayName/username 100 ký tự, bio 500 ký tự. Email legacy của user chưa đăng nhập cần được migrate bằng Admin trước khi bật đọc profile cho người khác. Rules không che được field nhạy cảm của một document.
+Rules chỉ cho chủ UID tạo/cập nhật profile, kiểm tra kiểu và giới hạn displayName/username 100 ký tự, bio 500 ký tự. Bước 1 đã migrate cả 3 profile legacy hiện có trên `memento-fre`; email không còn trong các profile này. Với môi trường khác, email legacy cần được migrate bằng Admin trước khi bật đọc profile cho người khác. Rules không che được field nhạy cảm của một document.
 
 ## Kiểm tra trên Firebase/emulator trước phát hành
 

@@ -48,10 +48,12 @@ PostDao join posts/connections/membership theo current UID; filter All/connectio
 
 ## Chuyển dữ liệu remote cũ
 
-Không chạy xóa hay migration production trong đợt sửa code này. Export/backup trước khi dùng Admin migration: chuyển users sang 9 field chuẩn (bỏ email); ánh xạ connection ID cũ sang Auto ID mới; chuyển root connection_members vào subcollection; tạo memberIds từ ACTIVE members; bổ sung maxMembers/ownerId/directKey/lastPostAt/schemaVersion; đổi ARCHIVED thành CLOSED; đổi milliseconds sang Timestamp. Chỉ xóa connection_requests và collection cũ sau khi đối soát xong. User legacy tự được sửa khi chính user đăng nhập, nhưng không thay thế migration toàn bộ dữ liệu trước deploy.
+Bước 1 ngày 13/09/2026 đã migrate 3 profile legacy trên `memento-fre`, giữ UID/username/createdAt và có backup local. Không có connection/request để migrate tại thời điểm kiểm kê; không xóa tài khoản Auth hoặc collection.
+
+Với dữ liệu legacy còn gặp ở môi trường khác, export/backup trước khi dùng Admin migration: chuyển users sang 9 field chuẩn (bỏ email); ánh xạ connection ID cũ sang Auto ID mới; chuyển root connection_members vào subcollection; tạo memberIds từ ACTIVE members; bổ sung maxMembers/ownerId/directKey/lastPostAt/schemaVersion; đổi ARCHIVED thành CLOSED; đổi milliseconds sang Timestamp. Chỉ xóa connection_requests và collection cũ sau khi đối soát xong. User legacy tự được sửa khi chính user đăng nhập, nhưng không thay thế migration toàn bộ dữ liệu trước deploy.
 
 ## Rules và triển khai
 
-`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Invite/post/connection mutations bị khóa đến bước triển khai transaction có kiểm chứng; không nới quyền toàn collection để làm demo. `firebase.json` trỏ rules/index, chưa deploy. Đã kiểm tra 16 trường hợp quyền đọc/ghi và validation bằng Firebase Emulator, cùng build debug, unit test username và 5 kiểm tra SQLite migration/query. Trước deploy vẫn cần test luồng Auth thực tế, migration remote và concurrent redeem khi triển khai invite.
+`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Invite/post/connection mutations bị khóa đến bước triển khai transaction có kiểm chứng; không nới quyền toàn collection để làm demo. `firebase.json` trỏ rules/index; đã deploy lên `memento-fre` ngày 13/09/2026 và xác nhận 2 indexes READY. Đã kiểm tra 16 trường hợp Rules, 12 kiểm tra Auth/Profile Emulator ở bước 1; build debug, unit test username và 5 kiểm tra SQLite migration/query đạt ở đợt nền trước. Khi triển khai invite phải bổ sung test concurrent redeem và cập nhật quyền phù hợp. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
 
 Rules không lọc dữ liệu sau query; điều kiện query phải phù hợp quyền đọc. Tham khảo [Firebase query rules](https://firebase.google.com/docs/firestore/security/rules-query) và [transaction](https://firebase.google.com/docs/firestore/manage-data/transactions).

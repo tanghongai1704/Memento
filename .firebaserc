@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "live": "memento-fre",
+    "emulator": "demo-memento-schema"
+  }
+}

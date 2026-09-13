@@ -1,5 +1,7 @@
 # Luồng sản phẩm
 
+MVP đầu ưu tiên DIRECT + một ảnh. Phạm vi, giới hạn và quyền lịch sử đã chốt ở [mvp-baseline](mvp-baseline.md); theo dõi triển khai ở [mvp-progress](mvp-progress.md).
+
 Đăng ký/đăng nhập → profile theo UID → Home. Người dùng chọn All hoặc một connection ACTIVE; bài viết thuộc connection, không gửi trực tiếp tới userId.
 
 DIRECT có hai người và không chuyển thành GROUP. GROUP có owner và giới hạn thành viên. Tạo người thứ ba trong cuộc trò chuyện 1-1 phải tạo group mới để không lộ lịch sử direct.

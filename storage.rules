@@ -1,0 +1,9 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Step 1 baseline: uploads stay disabled until the media pipeline and its tests exist.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -2,6 +2,8 @@
 
 Ứng dụng Android chia sẻ ảnh/video trong connection DIRECT hoặc GROUP, dùng Kotlin, Compose, Hilt, Firebase và Room.
 
+Theo dõi từng đợt tại [Tiến độ MVP](docs/mvp-progress.md); phạm vi/giới hạn tại [MVP baseline](docs/mvp-baseline.md).
+
 ## Trạng thái hiện tại
 
 - Auth email/password thật; tạo/khôi phục profile tại `users/{Firebase Auth UID}` và cache Room.
@@ -20,12 +22,17 @@ Cần cấu hình Firebase riêng của dự án, bật Email/Password và Fires
 ./gradlew :app:assembleDebug
 python3 tools/check_schema.py
 ./gradlew :core:domain:test
-firebase emulators:exec --only firestore --project demo-memento-schema "python3 tools/check_firestore_rules.py"
+firebase emulators:exec --only auth,firestore --project demo-memento-schema \
+  "python3 tools/check_firestore_rules.py && python3 tools/check_auth_profile.py"
 ```
 
-Rules/index trong repo là cấu hình chuẩn bị, chưa được deploy tự động. Đọc phần chuyển đổi dữ liệu trước khi dùng với Firebase đã có dữ liệu cũ.
+Ngày 13/09/2026 đã hoàn tất bước 1: migrate 3 profile trên `memento-fre`, deploy Firestore Rules và hai composite indexes (READY). Storage vẫn deny-all. Chi tiết kết nối, kiểm tra và phát hành ở [Firebase environment](docs/firebase-environment.md). Commit không tự deploy những thay đổi tiếp theo.
 
 ## Tài liệu
+
+- [Tiến độ và việc tiếp theo](docs/mvp-progress.md)
+- [Phạm vi và quy tắc MVP](docs/mvp-baseline.md)
+- [Môi trường Firebase](docs/firebase-environment.md)
 
 - [Schema và kế hoạch invite](docs/data-schema.md)
 - [Kiến trúc](docs/architecture.md)
