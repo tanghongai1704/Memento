@@ -6,7 +6,7 @@ MVP đầu ưu tiên DIRECT + một ảnh. Phạm vi, giới hạn và quyền l
 
 DIRECT có hai người và không chuyển thành GROUP. GROUP có owner và giới hạn thành viên. Tạo người thứ ba trong cuộc trò chuyện 1-1 phải tạo group mới để không lộ lịch sử direct.
 
-Ghép đôi/join sẽ dùng invite có thời hạn, giới hạn lượt dùng và transaction. UI gửi/duyệt request đã gỡ; UI invite chưa triển khai.
+Ghép đôi direct dùng mã 8 ký tự có hiệu lực 10 phút và dùng một lần. A tạo/chia sẻ code; B nhập code; Callable transaction tạo connection và hai membership. Tạo code mới tự revoke code cũ; A có thể revoke thủ công. Backend chặn tự redeem, cặp direct trùng và quá 5 lượt thử trong 10 phút. GROUP invite chưa triển khai.
 
 Create Post chọn connection, chọn/nén media; đăng bài thật chưa khả dụng. Pipeline dự kiến: lưu PENDING trong Room → upload Storage → batch post + lastPostAt → SYNCED. Home/History đọc Room. Post không hết hạn theo invite.
 

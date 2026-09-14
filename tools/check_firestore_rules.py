@@ -63,6 +63,11 @@ call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'users'}]}
 call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'users'}], 'limit': 20,
     'where': {'fieldFilter': {'field': {'fieldPath': 'usernameNormalized'}, 'op': 'EQUAL', 'value': {'stringValue': 'alice'}}}}})
 call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'limit': 20}}, expected=403)
+call('/invites/known-hash', 'a', expected=403)
+for internal_collection in ['directInviteOwners', 'directConnectionLocks', 'inviteRedeemRateLimits']:
+    call('/' + internal_collection + '/test', 'a', expected=403)
+call(':commit', 'a', {'writes': [{'update': {
+    'name': name + '/directInviteOwners/a', 'fields': {'codeHash': {'stringValue': 'forged'}}}}]}, expected=403)
 call(':commit', 'a', {'writes': [{'update': {'name': name + '/connections/c', 'fields': {}}}]}, expected=403)
 # Admin seed is scoped to the local demo emulator.
 call(':commit', 'ADMIN', {'writes': [
@@ -80,4 +85,4 @@ call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'connectio
         {'fieldFilter': {'field': {'fieldPath': 'memberIds'}, 'op': 'ARRAY_CONTAINS', 'value': {'stringValue': 'a'}}},
         {'fieldFilter': {'field': {'fieldPath': 'status'}, 'op': 'EQUAL', 'value': {'stringValue': 'ACTIVE'}}}]}},
     'orderBy': [{'field': {'fieldPath': 'lastPostAt'}, 'direction': 'DESCENDING'}]}})
-print('Firestore rules: 17 access/validation checks passed (local demo emulator).')
+print('Firestore rules: 22 access/validation checks passed (local demo emulator).')

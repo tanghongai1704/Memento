@@ -3,16 +3,42 @@ package com.tangai.memento.feature.connection.data.source
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.functions.FirebaseFunctions
 import com.tangai.memento.feature.auth.data.source.util.awaitTask
 import com.tangai.memento.feature.auth.data.mapper.toProfile
 import com.tangai.memento.domain.model.*
+import com.tangai.memento.feature.connection.domain.DirectInviteCode
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import javax.inject.Inject
 
-/** Read side only. Connection/member mutations belong to the future invite transaction. */
+/** Client reads Firestore directly; all invite/connection mutations go through Callable Functions. */
 class ConnectionFirestoreDataSource @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val functions: FirebaseFunctions
 ) {
+    suspend fun createDirectInvite(): DirectInviteCode {
+        val data = functions.getHttpsCallable("createDirectInvite").call().awaitTask().data.asMap()
+        return DirectInviteCode(
+            code = data["code"] as? String ?: error("Invite response is missing its code."),
+            expiresAtMillis = (data["expiresAtMillis"] as? Number)?.toLong()
+                ?: error("Invite response is missing its expiry.")
+        )
+    }
+
+    suspend fun redeemDirectInvite(code: String): String {
+        val data = functions.getHttpsCallable("redeemDirectInvite")
+            .call(mapOf("code" to code)).awaitTask().data.asMap()
+        return data["connectionId"] as? String ?: error("Redeem response is missing its connection.")
+    }
+
+    suspend fun revokeDirectInvite(): Boolean {
+        val data = functions.getHttpsCallable("revokeDirectInvite").call().awaitTask().data.asMap()
+        return data["revoked"] as? Boolean ?: false
+    }
+
     suspend fun getConnectionsForCurrentUser(): List<Connection> {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         return firestore.collection("connections")
@@ -39,6 +65,25 @@ class ConnectionFirestoreDataSource @Inject constructor(
             }
     }
 
+    fun observeCurrentUserConnectionChanges(): Flow<Unit> = callbackFlow {
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            close(IllegalStateException("User is not signed in."))
+            return@callbackFlow
+        }
+        val registration = firestore.collection("connections")
+            .whereArrayContains("memberIds", uid)
+            .whereEqualTo("status", "ACTIVE")
+            .orderBy("lastPostAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                when {
+                    error != null -> close(error)
+                    snapshot != null -> trySend(Unit)
+                }
+            }
+        awaitClose { registration.remove() }
+    }
+
     suspend fun getUser(uid: String): User? =
         firestore.collection("users").document(uid).get().awaitTask().toProfile()
 
@@ -48,4 +93,7 @@ class ConnectionFirestoreDataSource @Inject constructor(
         return firestore.collection("users").whereEqualTo("usernameNormalized", normalized)
             .limit(20).get().awaitTask().documents.mapNotNull { it.toProfile() }
     }
+
+    private fun Any?.asMap(): Map<*, *> = this as? Map<*, *>
+        ?: error("Unexpected response from invite service.")
 }

@@ -28,6 +28,8 @@ MVP ưu tiên DIRECT, PHOTO, SINGLE. Có nhiều connection direct, mỗi cặp 
 - Mốc giới hạn thử sai ban đầu: 5 lần/10 phút/UID; trả lỗi chung cho mã không hợp lệ. Đây chưa phải chống lạm dụng đầy đủ theo IP/thiết bị.
 - Khóa unique direct phía backend: định danh hash từ JSON array hai UID đã sort, dùng lock document + connection Auto ID trong cùng transaction. Lock là dữ liệu backend, không mở quyền đọc/ghi cho client.
 - Code hết hạn không làm connection hoặc bài viết hết hạn. Backend dùng thời gian server; không tin đồng hồ điện thoại.
+- Implementation bước 3 dùng ba collection nội bộ `directInviteOwners`, `directConnectionLocks` và `inviteRedeemRateLimits`; client bị cấm đọc/ghi. Creator và redeemer đều phải có `users/{uid}` trước khi connection được tạo.
+- Callable chạy Node.js 22 tại `asia-southeast1` và enforce App Check. Debug build dùng Debug provider; release dùng Play Integrity.
 
 ## Ảnh và bài viết (bước 4–5)
 

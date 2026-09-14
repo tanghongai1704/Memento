@@ -11,11 +11,11 @@ UID = Firebase Auth UID. Không lưu email, uid field, friendList hoặc connect
 
 `purpose: DIRECT_PAIR | GROUP_JOIN`, `createdBy: UID`, `targetConnectionId: String?`, `maxUses: Number`, `usedCount: Number`, `status: ACTIVE | USED | EXPIRED | REVOKED`, `createdAt: Timestamp`, `expiresAt: Timestamp`, `revokedAt: Timestamp?`, `schemaVersion: 1`.
 
-Normalize code: trim, bỏ dấu '-', uppercase Locale.ROOT; SHA-256 làm document ID. Không lưu raw code và không list invites. Model có sẵn; chưa có generator/redeemer/UI.
+Normalize code: trim, bỏ dấu '-', uppercase; SHA-256 làm document ID. Không lưu raw code và client không được đọc/list invites. Bước 3 đã triển khai generator/redeemer/revoke trong Callable Functions và UI tạo, nhập, chia sẻ mã.
 
-Redeem tương lai phải đọc tất cả document cần thiết trước khi write trong cùng transaction: invite; connection đích; membership; khóa unique direct nếu áp dụng. Kiểm tra ACTIVE, thời gian server trước expiresAt, usedCount < maxUses, không tự redeem, chưa active, connection GROUP đúng loại/ACTIVE/chưa đầy. Direct maxUses = 1. Group có maxUses/expiresAt/maxMembers bắt buộc.
+Redeem direct đọc dữ liệu cần thiết trước khi write trong cùng transaction: rate limit, invite, hai profile và khóa unique. Backend kiểm tra ACTIVE, thời gian server trước expiresAt, usedCount < maxUses, không tự redeem và chưa có direct ACTIVE. Direct maxUses = 1. Group vẫn chưa triển khai; khi làm phải kiểm tra connection đúng loại/ACTIVE/chưa đầy.
 
-Tạo direct dùng Auto ID được sinh ngoài callback retry, lưu hai member document và memberIds cùng transaction; directKey là định danh cặp được tạo ổn định từ hai UID đã sort (nên hash encoding có phân cách rõ). Query directKey rồi tạo Auto ID không tự bảo đảm uniqueness khi concurrent: cần backend/lock document riêng được thiết kế ở bước invite. Không dùng local duplicate check làm ràng buộc.
+Tạo direct dùng Auto ID được sinh ngoài callback retry, lưu connection, hai member document, invite và lock trong cùng transaction. `directKey` là SHA-256 của JSON array hai UID đã sort; document cùng ID trong `directConnectionLocks` bảo đảm uniqueness khi concurrent. `directInviteOwners/{uid}` giữ con trỏ invite hiện tại để tạo mã mới revoke mã cũ. `inviteRedeemRateLimits/{uid}` giới hạn 5 lượt thử trong 10 phút. Ba collection này là dữ liệu backend và Rules cấm toàn bộ client access.
 
 Group join cập nhật memberIds, member document, usedCount; USED khi đạt maxUses. Leave/remove giữ member document, cập nhật LEFT/REMOVED và audit đồng thời với memberIds. Owner phải chuyển quyền hoặc đóng group trước khi rời. Rejoin và quyền xem bài trước joinedAt cần chốt trước triển khai; hiện chưa expose posts remote.
 
@@ -54,6 +54,6 @@ Với dữ liệu legacy còn gặp ở môi trường khác, export/backup trư
 
 ## Rules và triển khai
 
-`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Invite/post/connection mutations bị khóa đến bước triển khai transaction có kiểm chứng; không nới quyền toàn collection để làm demo. `firebase.json` trỏ rules/index; đã deploy lên `memento-fre` ngày 13/09/2026 và xác nhận 2 indexes READY. Đã kiểm tra 16 trường hợp Rules, 12 kiểm tra Auth/Profile Emulator ở bước 1; build debug, unit test username và 5 kiểm tra SQLite migration/query đạt ở đợt nền trước. Khi triển khai invite phải bổ sung test concurrent redeem và cập nhật quyền phù hợp. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
+`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Invite, lock, rate-limit, connection/member mutation và post bị khóa với client; Admin SDK trong Functions thực hiện direct invite. `firebase.json` quản lý Rules/index/Functions và Emulator. Rules cùng ba Callable Functions đã deploy lên `memento-fre` ngày 13/09/2026; hai indexes READY. Kiểm thử hiện có 22 trường hợp Rules, 13 Auth/Profile, unit test invite core và integration transaction gồm concurrent redeem. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
 
 Rules không lọc dữ liệu sau query; điều kiện query phải phù hợp quyền đọc. Tham khảo [Firebase query rules](https://firebase.google.com/docs/firestore/security/rules-query) và [transaction](https://firebase.google.com/docs/firestore/manage-data/transactions).

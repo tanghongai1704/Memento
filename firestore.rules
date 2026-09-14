@@ -46,8 +46,17 @@ service cloud.firestore {
       }
     }
     match /invites/{codeHash} {
-      allow get: if signedIn();
-      allow list, write: if false;
+      // Raw codes are resolved only by the Callable backend. Clients cannot probe hashes.
+      allow read, write: if false;
+    }
+    match /directInviteOwners/{uid} {
+      allow read, write: if false;
+    }
+    match /directConnectionLocks/{directKey} {
+      allow read, write: if false;
+    }
+    match /inviteRedeemRateLimits/{uid} {
+      allow read, write: if false;
     }
   }
 }

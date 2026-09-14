@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.util.Locale
 
 @HiltViewModel
 class ConnectionViewModel @Inject constructor(
@@ -17,29 +20,79 @@ class ConnectionViewModel @Inject constructor(
 ) : ViewModel() {
     private val state = MutableStateFlow(ConnectionUiState())
     val uiState = state.asStateFlow()
+    private var connectionObservationJob: Job? = null
     private val listener = FirebaseAuth.AuthStateListener {
+        connectionObservationJob?.cancel()
         state.value = ConnectionUiState()
         val uid = it.currentUser?.uid
-        if (uid != null) viewModelScope.launch {
+        if (uid != null) connectionObservationJob = viewModelScope.launch {
             state.value = state.value.copy(isLoading = true)
-            val result = repository.loadConnections()
-            if (auth.currentUser?.uid == uid) state.value = state.value.copy(
-                connectedUsers = result.getOrDefault(emptyList()), isLoading = false,
-                errorMessage = result.exceptionOrNull()?.message)
+            repository.observeConnections().collectLatest { result ->
+                if (auth.currentUser?.uid == uid) state.value = state.value.copy(
+                    connectedUsers = result.getOrDefault(state.value.connectedUsers),
+                    isLoading = false,
+                    errorMessage = result.exceptionOrNull()?.userMessage()
+                )
+            }
         }
     }
     init { auth.addAuthStateListener(listener) }
-    fun onQueryChanged(query: String) { state.value = state.value.copy(query = query, searchResults = emptyList()) }
-    fun searchUsers() {
+    fun onRedeemCodeChanged(value: String) {
+        val normalized = value.uppercase(Locale.ROOT).filter { it.isLetterOrDigit() }.take(8)
+        val formatted = if (normalized.length > 4) normalized.take(4) + "-" + normalized.drop(4) else normalized
+        state.value = state.value.copy(redeemCode = formatted, errorMessage = null, successMessage = null)
+    }
+    fun createInvite() {
         val uid = auth.currentUser?.uid ?: return
-        val query = state.value.query
         viewModelScope.launch {
-            state.value = state.value.copy(isLoading = true, errorMessage = null)
-            val result = repository.searchUsers(query)
+            state.value = state.value.copy(isInviteActionRunning = true, errorMessage = null, successMessage = null)
+            val result = repository.createDirectInvite()
             if (auth.currentUser?.uid == uid) state.value = state.value.copy(
-                searchResults = if (state.value.query == query) result.getOrDefault(emptyList()) else emptyList(),
-                isLoading = false, errorMessage = result.exceptionOrNull()?.message)
+                inviteCode = result.getOrNull()?.code,
+                inviteExpiresAtMillis = result.getOrNull()?.expiresAtMillis,
+                isInviteActionRunning = false,
+                errorMessage = result.exceptionOrNull()?.userMessage()
+            )
         }
     }
-    override fun onCleared() { auth.removeAuthStateListener(listener) }
+    fun revokeInvite() {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            state.value = state.value.copy(isInviteActionRunning = true, errorMessage = null, successMessage = null)
+            val result = repository.revokeDirectInvite()
+            if (auth.currentUser?.uid == uid) state.value = state.value.copy(
+                inviteCode = null, inviteExpiresAtMillis = null, isInviteActionRunning = false,
+                successMessage = if (result.isSuccess) "Invite revoked." else null,
+                errorMessage = result.exceptionOrNull()?.userMessage()
+            )
+        }
+    }
+    fun redeemInvite() {
+        val uid = auth.currentUser?.uid ?: return
+        val code = state.value.redeemCode
+        if (code.replace("-", "").length != 8) {
+            state.value = state.value.copy(errorMessage = "Enter the complete 8-character invite code.")
+            return
+        }
+        viewModelScope.launch {
+            state.value = state.value.copy(isRedeemRunning = true, errorMessage = null, successMessage = null)
+            val result = repository.redeemDirectInvite(code)
+            if (auth.currentUser?.uid == uid) {
+                val users = if (result.isSuccess) repository.loadConnections().getOrDefault(state.value.connectedUsers)
+                    else state.value.connectedUsers
+                state.value = state.value.copy(
+                    redeemCode = if (result.isSuccess) "" else code, connectedUsers = users,
+                    isRedeemRunning = false,
+                    successMessage = if (result.isSuccess) "Connected successfully." else null,
+                    errorMessage = result.exceptionOrNull()?.userMessage()
+                )
+            }
+        }
+    }
+    override fun onCleared() {
+        connectionObservationJob?.cancel()
+        auth.removeAuthStateListener(listener)
+    }
+    private fun Throwable.userMessage(): String = message?.takeIf { it.isNotBlank() }
+        ?: "Something went wrong. Please try again."
 }
