@@ -19,9 +19,17 @@ class HomeRepositoryImpl @Inject constructor(private val database: MementoDataba
         connections.getCurrentUserConnections().getOrThrow()
         database.connectionMemberDao().getActiveMembershipsForUser(uid).mapNotNull { member ->
             database.connectionDao().getConnectionById(member.connectionId)
-                ?.takeIf { it.status == "ACTIVE" }?.toDomain()
+                ?.takeIf { it.status == "ACTIVE" }
+                ?.let { connection ->
+                    connection.toDomain(
+                        database.connectionMemberDao().getMembersByConnectionId(connection.id)
+                            .map { it.toDomain() }
+                    )
+                }
         }.sortedByDescending { it.lastPostAt }.also { check(auth.currentUser?.uid == uid) }
     }
+    override suspend fun loadConnectedUsers(): Result<List<User>> = connections.loadConnections()
+
     override fun getFilteredPosts(posts: List<Post>, filter: FeedFilter): List<Post> =
         posts.filter { filter is FeedFilter.All || (filter is FeedFilter.Connection && it.connectionId == filter.connectionId) }
             .sortedByDescending { it.createdAt ?: it.clientCreatedAt }

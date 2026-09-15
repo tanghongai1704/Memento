@@ -21,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -107,24 +108,26 @@ fun MediaPreviewScreen(
 
             if (previewMedia != null) {
                 Text(
-                    text = "${previewMedia.type.name.lowercase().replaceFirstChar { it.uppercase() }} · ${uiState.selectedMedia.size} selected",
+                    text = "Photo · ready to post",
                     fontSize = 16.sp,
                     modifier = Modifier.padding(top = 8.dp)
                 )
-                if (previewMedia.type == MediaType.VIDEO) {
-                    Text(
-                        text = "Thumbnail: ${previewMedia.thumbnailUri != null}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Connection: ${uiState.selectedRecipient?.name ?: "Direct connection"}",
+                text = "Share with: ${uiState.selectedRecipient?.let(uiState::labelFor) ?: "No connection"}",
                 fontSize = 16.sp
+            )
+
+            OutlinedTextField(
+                value = uiState.caption,
+                onValueChange = viewModel::onCaptionChanged,
+                label = { Text("Caption (optional)") },
+                supportingText = { Text("${uiState.caption.length}/1000") },
+                enabled = !uiState.isProcessing && !uiState.isUploading,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -161,7 +164,7 @@ fun MediaPreviewScreen(
                         },
                         modifier = Modifier.padding(8.dp)
                     ) {
-                        Text("Confirm & Upload")
+                        Text(if (uiState.pendingPhoto == null) "Post photo" else "Retry upload")
                     }
                 }
             }

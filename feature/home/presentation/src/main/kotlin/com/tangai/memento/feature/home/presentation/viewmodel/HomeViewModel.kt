@@ -3,6 +3,7 @@ package com.tangai.memento.feature.home.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tangai.memento.domain.model.Post
+import com.tangai.memento.domain.model.displayLabel
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.domain.HomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,12 +30,18 @@ class HomeViewModel @Inject constructor(
 
             val connectionsResult = homeRepository.loadConnections()
             val postsResult = homeRepository.loadPosts()
+            val connectedUsersResult = homeRepository.loadConnectedUsers()
+            val connections = connectionsResult.getOrElse { emptyList() }
+            val connectedUsersById = connectedUsersResult.getOrElse { emptyList() }.associateBy { it.id }
 
             _uiState.value = _uiState.value.copy(
                 posts = postsResult.getOrElse { emptyList() },
-                connections = connectionsResult.getOrElse { emptyList() },
+                connections = connections,
+                connectionLabels = connections.associate { it.id to it.displayLabel(connectedUsersById) },
                 isLoading = false,
-                errorMessage = postsResult.exceptionOrNull()?.message ?: connectionsResult.exceptionOrNull()?.message
+                errorMessage = postsResult.exceptionOrNull()?.message
+                    ?: connectionsResult.exceptionOrNull()?.message
+                    ?: connectedUsersResult.exceptionOrNull()?.message
             )
         }
     }
@@ -48,5 +55,6 @@ class HomeViewModel @Inject constructor(
     }
 
     fun getPostLabel(post: Post): String =
-        _uiState.value.connections.find { it.id == post.connectionId }?.name ?: "Direct connection"
+        _uiState.value.connections.find { it.id == post.connectionId }
+            ?.let(_uiState.value::labelFor) ?: "Direct connection"
 }

@@ -1,18 +1,14 @@
 package com.tangai.memento.feature.post.presentation.viewmodel
 
-import android.content.Context
-import android.net.Uri
-import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tangai.memento.domain.model.LocalMediaItem
 import com.tangai.memento.domain.model.MediaType
 import com.tangai.memento.domain.model.Post
 import com.tangai.memento.domain.model.Connection
+import com.tangai.memento.domain.model.displayLabel
 import com.tangai.memento.feature.post.domain.PostRepository
-import com.tangai.memento.feature.post.presentation.util.MediaProcessingPipeline
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +17,6 @@ import javax.inject.Inject
 
 @HiltViewModel
 class CreatePostViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val postRepository: PostRepository,
     private val connectionRepository: com.tangai.memento.feature.connection.domain.ConnectionRepository
 ) : ViewModel() {
@@ -29,10 +24,30 @@ class CreatePostViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val result = connectionRepository.getCurrentUserConnections()
-            _uiState.value = _uiState.value.copy(recipients = result.getOrDefault(emptyList()),
-                errorMessage = result.exceptionOrNull()?.message)
+            val recipients = result.getOrDefault(emptyList())
+            val connectedUsers = if (recipients.isEmpty()) {
+                emptyList()
+            } else {
+                connectionRepository.loadConnections().getOrDefault(emptyList())
+            }
+            val connectedUsersById = connectedUsers.associateBy { it.id }
+            val pending = postRepository.getLatestPendingPhoto().getOrNull()
+            _uiState.value = _uiState.value.copy(
+                recipients = recipients,
+                recipientLabels = recipients.associate { connection ->
+                    connection.id to connection.displayLabel(connectedUsersById)
+                },
+                selectedRecipient = pending?.post?.connectionId?.let { id -> recipients.find { it.id == id } },
+                selectedMedia = pending?.let {
+                    listOf(LocalMediaItem(uri = it.localUri, type = MediaType.IMAGE, displayName = "Pending photo"))
+                } ?: emptyList(),
+                caption = pending?.post?.caption.orEmpty(),
+                pendingPhoto = pending,
+                errorMessage = result.exceptionOrNull()?.message
+            )
         }
     }
+
     val uiState: StateFlow<CreatePostUiState> = _uiState.asStateFlow()
 
     fun onRecipientSelected(user: Connection) {
@@ -48,81 +63,72 @@ class CreatePostViewModel @Inject constructor(
 
     fun addSelectedMedia(media: LocalMediaItem) {
         val mediaWithName = media.copy(displayName = media.displayName.ifEmpty { "media_${System.currentTimeMillis()}" })
-        val existing = _uiState.value.selectedMedia
-        if (existing.any { it.uri == mediaWithName.uri }) {
-            return
-        }
         _uiState.value = _uiState.value.copy(
-            selectedMedia = existing + mediaWithName,
-            errorMessage = null
-        )
-    }
-
-    fun addSelectedMedia(mediaList: List<LocalMediaItem>) {
-        if (mediaList.isEmpty()) return
-        val merged = _uiState.value.selectedMedia + mediaList.filter { item ->
-            _uiState.value.selectedMedia.none { it.uri == item.uri }
-        }
-        _uiState.value = _uiState.value.copy(
-            selectedMedia = merged,
-            errorMessage = null
+            selectedMedia = listOf(mediaWithName.copy(type = MediaType.IMAGE)),
+            pendingPhoto = null,
+            errorMessage = null,
+            successMessage = null
         )
     }
 
     fun removeSelectedMedia(uri: String) {
         _uiState.value = _uiState.value.copy(
-            selectedMedia = _uiState.value.selectedMedia.filterNot { it.uri == uri }
+            selectedMedia = _uiState.value.selectedMedia.filterNot { it.uri == uri },
+            pendingPhoto = null
         )
     }
 
     fun clearSelectedMedia() {
-        _uiState.value = _uiState.value.copy(selectedMedia = emptyList())
+        _uiState.value = _uiState.value.copy(selectedMedia = emptyList(), pendingPhoto = null)
     }
 
-    fun confirmSelectedMedia(onReady: () -> Unit) {
-        val selectedMedia = _uiState.value.selectedMedia
-        if (selectedMedia.isEmpty()) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "Please select at least one media item"
-            )
-            return
-        }
-
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isProcessing = true,
-                processingProgress = 0f,
-                processingMessage = "Detecting media type...",
-                errorMessage = null
-            )
-
-            val processedMedia = selectedMedia.mapIndexed { index, media ->
-                _uiState.value = _uiState.value.copy(
-                    processingProgress = (index.toFloat() / selectedMedia.size.toFloat()),
-                    processingMessage = if (media.type == MediaType.VIDEO) {
-                        "Processing video..."
-                    } else {
-                        "Resizing and compressing image..."
-                    }
-                )
-                MediaProcessingPipeline.processMedia(context, media)
-            }
-
-            _uiState.value = _uiState.value.copy(
-                selectedMedia = processedMedia,
-                isProcessing = false,
-                processingProgress = 1f,
-                processingMessage = "Ready for upload",
-                errorMessage = null
-            )
-            onReady()
-        }
+    fun onCaptionChanged(value: String) {
+        if (value.length <= 1000) _uiState.value = _uiState.value.copy(caption = value, errorMessage = null)
     }
 
     fun confirmAndUploadSelectedMedia(onSuccess: (Post) -> Unit) {
+        val recipient = _uiState.value.selectedRecipient
+        val media = _uiState.value.selectedMedia.singleOrNull()
+        if (recipient == null || media == null) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Choose a connection and one photo.")
+            return
+        }
         viewModelScope.launch {
-            val result = postRepository.uploadMedia(_uiState.value.selectedMedia) {}
-            _uiState.value = _uiState.value.copy(errorMessage = result.exceptionOrNull()?.message)
+            _uiState.value = _uiState.value.copy(
+                isProcessing = _uiState.value.pendingPhoto == null,
+                isUploading = false,
+                processingMessage = "Resizing and compressing photo…",
+                errorMessage = null,
+                successMessage = null
+            )
+            val pendingResult = _uiState.value.pendingPhoto?.let { Result.success(it) }
+                ?: postRepository.preparePhotoPost(recipient.id, media, _uiState.value.caption)
+            val pending = pendingResult.getOrNull()
+            if (pending == null) {
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    errorMessage = pendingResult.exceptionOrNull()?.message ?: "Could not prepare the photo."
+                )
+                return@launch
+            }
+            _uiState.value = _uiState.value.copy(
+                pendingPhoto = pending,
+                selectedMedia = listOf(media.copy(uri = pending.localUri)),
+                isProcessing = false,
+                isUploading = true,
+                uploadProgress = 0f
+            )
+            val result = postRepository.uploadPendingPhoto(pending) { progress ->
+                _uiState.value = _uiState.value.copy(uploadProgress = progress)
+            }
+            _uiState.value = _uiState.value.copy(
+                isUploading = false,
+                uploadProgress = if (result.isSuccess) 1f else _uiState.value.uploadProgress,
+                pendingPhoto = if (result.isSuccess) null else pending,
+                successMessage = if (result.isSuccess) "Photo posted." else null,
+                errorMessage = result.exceptionOrNull()?.message
+            )
+            result.getOrNull()?.let(onSuccess)
         }
     }
 

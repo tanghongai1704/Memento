@@ -40,7 +40,7 @@ Media map: `mediaId`, `mediaType: IMAGE | VIDEO`, `storagePath`, `thumbnailPath:
 
 Pagination dự kiến theo từng connection: status ACTIVE, createdAt DESC, limit 20, startAfter(lastDocument). Index queryScope COLLECTION cho query posts dưới một connection; không nhầm với COLLECTION_GROUP query toàn bộ posts. Trang 20 không giới hạn tổng lịch sử.
 
-Tạo postId/mediaId trước upload; giữ nguyên khi retry. Room PENDING → nén → Storage → batch set post + update connection.lastPostAt/updatedAt bằng server timestamp → Room SYNCED. Retry đã commit không được reset createdAt; cần kiểm tra postId/idempotency. Firestore không atomic với Storage: cần retry và orphan cleanup, không publish metadata trước file. Soft delete metadata trước cleanup Storage. Chưa triển khai pipeline này trong code.
+Tạo postId/mediaId trước upload; giữ nguyên khi retry. Luồng đã triển khai: Room PENDING → xử lý JPEG → Storage → Callable `finalizePhotoPost` → Firestore transaction set Post + update connection.lastPostAt/updatedAt bằng cùng server timestamp → Room SYNCED. Backend đọc object thật, kiểm tra `contentType`, byte size và custom metadata `authorId`; post đã tồn tại chỉ được coi là retry thành công khi dữ liệu bất biến khớp, nên không reset createdAt. Firestore không atomic với Storage: retry dùng lại object, còn orphan cleanup thuộc bước 7. Soft delete metadata trước cleanup Storage.
 
 ## Room
 
@@ -54,6 +54,6 @@ Với dữ liệu legacy còn gặp ở môi trường khác, export/backup trư
 
 ## Rules và triển khai
 
-`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Invite, lock, rate-limit, connection/member mutation và post bị khóa với client; Admin SDK trong Functions thực hiện direct invite. `firebase.json` quản lý Rules/index/Functions và Emulator. Rules cùng ba Callable Functions đã deploy lên `memento-fre` ngày 13/09/2026; hai indexes READY. Kiểm thử hiện có 22 trường hợp Rules, 13 Auth/Profile, unit test invite core và integration transaction gồm concurrent redeem. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
+`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Invite, lock, rate-limit, connection/member mutation và Post vẫn khóa client write; Admin SDK trong Functions thực hiện direct invite và finalize post. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình. `firebase.json` quản lý Rules/index/Functions và Emulator, gồm Storage Emulator. Ba Callable invite đã deploy ngày 13/09/2026; `finalizePhotoPost` và Storage Rules đã deploy ngày 14/09/2026; hai indexes READY. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
 
 Rules không lọc dữ liệu sau query; điều kiện query phải phù hợp quyền đọc. Tham khảo [Firebase query rules](https://firebase.google.com/docs/firestore/security/rules-query) và [transaction](https://firebase.google.com/docs/firestore/manage-data/transactions).

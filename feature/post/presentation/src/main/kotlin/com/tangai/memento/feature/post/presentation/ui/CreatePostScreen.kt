@@ -64,8 +64,8 @@ fun CreatePostScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                items(createPostUiState.recipients) { user ->
-                    val isSelected = createPostUiState.selectedRecipient?.id == user.id
+                items(createPostUiState.recipients, key = { it.id }) { connection ->
+                    val isSelected = createPostUiState.selectedRecipient?.id == connection.id
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = if (isSelected) {
@@ -77,13 +77,13 @@ fun CreatePostScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(8.dp)
-                            .clickable { viewModel.onRecipientSelected(user) }
+                            .clickable { viewModel.onRecipientSelected(connection) }
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp)
                         ) {
                             Text(
-                                text = user.name ?: "Direct connection",
+                                text = createPostUiState.labelFor(connection),
                                 fontSize = 18.sp
                             )
                             if (isSelected) {

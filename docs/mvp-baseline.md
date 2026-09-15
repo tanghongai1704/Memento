@@ -45,7 +45,7 @@ MVP ưu tiên DIRECT, PHOTO, SINGLE. Có nhiều connection direct, mỗi cặp 
 | Storage path | `connections/{connectionId}/posts/{postId}/{mediaId}.jpg` |
 | Phân trang | 20 post/trang/connection; tiếp tục tải lịch sử cũ |
 
-Các ràng buộc cần có ở app và phía Rules/backend phù hợp, không chỉ UI. Metadata sizeBytes/width/height phải đo từ file thật. Pipeline ảnh hiện resize trong khung 1920×1440; bước 4 cần điều chỉnh để thống nhất cạnh dài 1920 và giới hạn byte.
+Các ràng buộc đã được enforce ở app và phía Rules/backend. Metadata sizeBytes/width/height lấy từ file đã xử lý; cạnh dài tối đa 1.920 và byte size được kiểm tra lại trước khi backend publish Post. Bước 4 đã hoàn tất đường gửi; listener/pagination/download phía người nhận thuộc bước 5.
 
 Video hiện chỉ tạo thumbnail và còn dùng số dung lượng ước lượng trong pipeline local; **chưa có nén video thật**. Không đưa VIDEO vào bản MVP đầu, không dùng con số ước lượng đó làm metadata remote.
 

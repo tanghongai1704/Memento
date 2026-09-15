@@ -7,7 +7,12 @@ import com.tangai.memento.feature.home.domain.FeedFilter
 data class HomeUiState(
     val posts: List<Post> = emptyList(),
     val connections: List<Connection> = emptyList(),
+    val connectionLabels: Map<String, String> = emptyMap(),
     val selectedFilter: FeedFilter = FeedFilter.All,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
-)
+) {
+    fun labelFor(connection: Connection): String = connectionLabels[connection.id]
+        ?: connection.name?.takeIf { it.isNotBlank() }
+        ?: "Direct connection"
+}

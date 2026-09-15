@@ -6,6 +6,7 @@ const {
   redeemDirectInvite,
   revokeDirectInvite,
 } = require("../lib/inviteService");
+const {finalizePhotoPost} = require("../lib/postService");
 
 initializeApp({projectId: "demo-memento-schema"});
 const db = getFirestore();
@@ -58,7 +59,37 @@ async function main() {
     assert.equal((await redeemDirectInvite(db, "rate-user", "AAAA-AAAA")).reason, "INVALID_INVITE");
   }
   assert.equal((await redeemDirectInvite(db, "rate-user", "BBBB-BBBB")).reason, "RATE_LIMITED");
+  const photoInput = {
+    connectionId: connection.id, postId: "post-photo", mediaId: "media-photo",
+    clientCreatedAt: 123456789, caption: "MVP photo",
+    storagePath: `connections/${connection.id}/posts/post-photo/media-photo.jpg`,
+    mimeType: "image/jpeg", width: 1920, height: 1080, sizeBytes: 2048,
+  };
+  const published = await finalizePhotoPost(db, "creator-a", photoInput, async () => true);
+  assert.equal(published.ok, true);
+  const post = await connection.ref.collection("posts").doc("post-photo").get();
+  assert.equal(post.get("authorId"), "creator-a");
+  assert.equal(post.get("mediaItems").length, 1);
+  assert.equal(post.get("clientCreatedAt"), 123456789);
+  assert.equal((await connection.ref.get()).get("lastPostAt") instanceof Timestamp, true);
+  const retried = await finalizePhotoPost(db, "creator-a", photoInput, async () => true);
+  assert.deepEqual(retried, published);
+  const conflictingRetry = await finalizePhotoPost(
+    db, "creator-a", {...photoInput, caption: "Changed after publish"}, async () => true,
+  );
+  assert.equal(conflictingRetry.reason, "POST_CONFLICT");
+  const rejectedMember = await finalizePhotoPost(
+    db, "redeemer-e", {...photoInput, postId: "not-member", storagePath:
+      `connections/${connection.id}/posts/not-member/media-photo.jpg`}, async () => true,
+  );
+  assert.equal(rejectedMember.reason, "NOT_ACTIVE_MEMBER");
+  const rejectedMedia = await finalizePhotoPost(
+    db, "creator-a", {...photoInput, postId: "bad-media", storagePath:
+      `connections/${connection.id}/posts/bad-media/media-photo.jpg`}, async () => false,
+  );
+  assert.equal(rejectedMedia.reason, "MEDIA_INVALID");
   console.log("Direct invite emulator checks passed: create, replace, revoke, self, expiry, rate limit, duplicate lock, concurrent redeem.");
+  console.log("Photo finalize emulator checks passed: membership, media verification, atomic metadata, idempotent retry.");
 }
 
 main().catch((error) => {

@@ -59,21 +59,6 @@ fun MediaPickerScreen(
             viewModel.addSelectedMedia(LocalMediaItem(uri = uri.toString(), type = mediaType, displayName = "photo_${System.currentTimeMillis()}"))
         }
     }
-    val multiplePhotoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
-    ) { uris ->
-        val items = uris.map { uri ->
-            LocalMediaItem(uri = uri.toString(), type = MediaType.IMAGE, displayName = "photo_${System.currentTimeMillis()}")
-        }
-        viewModel.addSelectedMedia(items)
-    }
-    val videoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            viewModel.addSelectedMedia(LocalMediaItem(uri = uri.toString(), type = MediaType.VIDEO, displayName = "video_${System.currentTimeMillis()}"))
-        }
-    }
 
     Box(
         modifier = Modifier
@@ -88,7 +73,7 @@ fun MediaPickerScreen(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Select Media",
+                text = "Select one photo",
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center,
@@ -101,28 +86,14 @@ fun MediaPickerScreen(
                 onClick = { singlePhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 modifier = Modifier.padding(8.dp)
             ) {
-                Text("Choose Photo")
-            }
-
-            Button(
-                onClick = { multiplePhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                modifier = Modifier.padding(8.dp)
-            ) {
-                Text("Choose Photos")
-            }
-
-            Button(
-                onClick = { videoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
-                modifier = Modifier.padding(8.dp)
-            ) {
-                Text("Choose Video")
+                Text(if (uiState.selectedMedia.isEmpty()) "Choose photo" else "Choose another photo")
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             if (uiState.selectedMedia.isNotEmpty()) {
                 Text(
-                    text = "Selected (${uiState.selectedMedia.size})",
+                    text = "Selected photo",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )

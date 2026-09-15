@@ -10,8 +10,8 @@ Theo dõi từng đợt tại [Tiến độ MVP](docs/mvp-progress.md); phạm v
 - Direct invite đã hoạt động qua Callable Functions: tạo/chia sẻ/revoke mã 8 ký tự, redeem tạo connection + hai member bằng transaction và khóa chống cặp trùng.
 - Connection đọc Firestore theo `memberIds`, cache connection/members trong một Room transaction. Repository vẫn hỗ trợ search username chính xác nhưng UI MVP dùng invite làm luồng kết nối.
 - Home/History đọc cache Room. Home chọn All hoặc connection; không còn dữ liệu mẫu.
-- Model/Room đã chuẩn bị cho post và metadata media. UI picker/nén media vẫn hoạt động.
-- Chưa triển khai đồng bộ/pagination post, upload Storage hoặc retry/cleanup. Nút đăng bài báo chưa khả dụng; không báo upload thành công giả.
+- Đăng một ảnh PHOTO/SINGLE đã hoạt động: Room PENDING/FAILED/SYNCED, sửa hướng/resize/nén JPEG, Storage Rules theo membership, Callable transaction tạo Post + cập nhật lastPostAt và retry giữ nguyên ID sau khi mở lại app.
+- Home người gửi hiển thị ảnh local. Đồng bộ/pagination/download ảnh phía người nhận và cleanup orphan chưa triển khai; đây là bước 5 và 7.
 - Luồng gửi/duyệt connection request cũ đã gỡ. Connection mới chỉ được tạo qua backend invite.
 
 ## Chạy và kiểm tra
@@ -24,11 +24,12 @@ Cần cấu hình Firebase riêng của dự án, bật Email/Password và Fires
 python3 tools/check_schema.py
 ./gradlew :core:domain:test
 cd functions && npm test && npm run test:emulator && cd ..
+cd functions && npm run test:storage-rules && cd ..
 firebase emulators:exec --only auth,firestore --project demo-memento-schema \
   "python3 tools/check_firestore_rules.py && python3 tools/check_auth_profile.py"
 ```
 
-Ngày 13/09/2026 đã hoàn tất bước 1–3: migrate profile, hoàn thiện Auth/profile và deploy direct invite backend cùng Rules lên `memento-fre`. Storage vẫn deny-all. Chi tiết kết nối, kiểm tra và phát hành ở [Firebase environment](docs/firebase-environment.md). Commit không tự deploy những thay đổi tiếp theo.
+Ngày 14/09/2026 đã hoàn tất bước 1–4: migrate profile, Auth/profile, direct invite và luồng người gửi đăng một ảnh thật. Bốn Callable Functions cùng Firestore/Storage Rules liên quan đã deploy lên `memento-fre`. Chi tiết kết nối, kiểm tra và phát hành ở [Firebase environment](docs/firebase-environment.md). Commit không tự deploy những thay đổi tiếp theo.
 
 ## Tài liệu
 

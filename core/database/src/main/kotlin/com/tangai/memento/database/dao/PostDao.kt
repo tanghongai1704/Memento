@@ -27,6 +27,25 @@ abstract class PostDao {
     @Upsert abstract suspend fun upsertPost(post: PostEntity)
     @Upsert abstract suspend fun upsertMedia(media: List<MediaItemEntity>)
 
+    @Query("SELECT * FROM posts WHERE connectionId = :connectionId AND id = :postId LIMIT 1")
+    abstract suspend fun getPost(connectionId: String, postId: String): PostEntity?
+
+    @Query("""SELECT * FROM posts WHERE authorId = :authorId
+        AND localSyncStatus IN ('PENDING', 'FAILED')
+        ORDER BY clientCreatedAt DESC""")
+    abstract suspend fun getRetryablePosts(authorId: String): List<PostEntity>
+
+    @Query("""UPDATE posts SET localSyncStatus = :syncStatus,
+        createdAt = :createdAt, updatedAt = :updatedAt
+        WHERE connectionId = :connectionId AND id = :postId""")
+    abstract suspend fun updateSyncState(
+        connectionId: String,
+        postId: String,
+        syncStatus: String,
+        createdAt: Long? = null,
+        updatedAt: Long? = null
+    )
+
     @Transaction
     open suspend fun loadPosts(uid: String): List<Post> = getPosts(uid).map {
         it.toDomain(getMedia(it.connectionId, it.id).map { media -> media.toDomain() })

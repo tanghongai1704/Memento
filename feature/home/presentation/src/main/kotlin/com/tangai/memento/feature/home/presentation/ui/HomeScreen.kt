@@ -1,5 +1,8 @@
 package com.tangai.memento.feature.home.presentation.ui
 
+import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -20,14 +23,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.domain.model.Post
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.presentation.viewmodel.HomeViewModel
+import java.io.File
 
 @Composable
 fun HomeScreen(
@@ -66,10 +74,10 @@ fun HomeScreen(
                     )
                 }
 
-                items(uiState.connections) { connection ->
+                items(uiState.connections, key = { it.id }) { connection ->
                     Spacer(modifier = Modifier.width(8.dp))
                     FilterChip(
-                        label = connection.name ?: "Direct connection",
+                        label = uiState.labelFor(connection),
                         selected = (uiState.selectedFilter is FeedFilter.Connection &&
                                 (uiState.selectedFilter as FeedFilter.Connection).connectionId == connection.id),
                         onClick = { viewModel.onFilterSelected(FeedFilter.Connection(connection.id)) }
@@ -145,6 +153,17 @@ fun PostCard(
     post: Post,
     postLabel: String
 ) {
+    val context = LocalContext.current
+    val media = post.mediaItems.firstOrNull()
+    val localBitmap: Bitmap? = remember(post.id, post.connectionId, media?.mediaId) {
+        media?.let {
+            val file = File(
+                context.filesDir,
+                "pending_media/${post.connectionId}/${post.id}/${it.mediaId}.jpg",
+            )
+            if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
+        }
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -159,10 +178,20 @@ fun PostCard(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "[${post.postType.name} placeholder]",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            if (localBitmap != null) {
+                Image(
+                    bitmap = localBitmap.asImageBitmap(),
+                    contentDescription = post.caption ?: "Shared photo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(280.dp)
+                )
+            } else {
+                Text("Photo saved. Remote download arrives in step 5.")
+            }
+            post.caption?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(it, style = MaterialTheme.typography.bodyMedium)
+            }
         }
     }
 }

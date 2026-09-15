@@ -34,4 +34,7 @@ interface ConnectionDao {
 
     @Query("DELETE FROM connections WHERE id = :connectionId")
     suspend fun deleteConnectionById(connectionId: String)
+
+    @Query("UPDATE connections SET lastPostAt = :lastPostAt, updatedAt = :updatedAt WHERE id = :connectionId")
+    suspend fun updateActivity(connectionId: String, lastPostAt: Long, updatedAt: Long)
 }

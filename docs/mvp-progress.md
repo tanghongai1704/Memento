@@ -9,8 +9,8 @@
 | 1 | Môi trường Firebase, dữ liệu cũ, Rules/index và quy tắc MVP | Hoàn tất — 13/09/2026 |
 | 2 | Auth/profile tối thiểu và quên mật khẩu | Hoàn tất — 13/09/2026 |
 | 3 | Direct invite và transaction chống trùng | Hoàn tất — 13/09/2026 |
-| 4 | Đăng một ảnh thật: Room → Storage → Firestore | Tiếp theo |
-| 5 | Đồng bộ người nhận, Home, pagination | Chưa bắt đầu |
+| 4 | Đăng một ảnh thật: Room → Storage → Firestore | Hoàn tất — 14/09/2026 |
+| 5 | Đồng bộ người nhận, Home, pagination | Tiếp theo |
 | 6 | History, soft delete và disconnect | Chưa bắt đầu |
 | 7 | Offline, retry, khôi phục sau tắt app, cleanup | Chưa bắt đầu |
 | 8 | Kiểm thử toàn hành trình trên hai thiết bị | Chưa bắt đầu |
@@ -123,3 +123,46 @@ Direct invite đã có implementation từ UI tới backend thật; client khôn
 ### Tiếp theo — bước 4
 
 Triển khai đăng đúng một ảnh vào một connection ACTIVE: tạo cố định postId/mediaId, ghi Room PENDING, resize cạnh dài tối đa 1.920 px và nén JPEG ≤ 5 MiB, mở Storage Rules đúng path/member, upload file trước, batch ghi Post + `lastPostAt`, rồi đổi local sang SYNCED. Bổ sung retry dùng lại ID và kiểm thử lỗi giữa Storage/Firestore; chưa làm listener/pagination người nhận cho đến bước 5.
+
+## 14/09/2026 — bước 4
+
+### Đã làm
+
+- Create Post đã dùng luồng thật cho đúng một ảnh PHOTO/SINGLE và caption tùy chọn tối đa 1.000 ký tự. App sinh `postId` và `mediaId` một lần, ghi Room `PENDING`, sửa hướng EXIF, resize cạnh dài tối đa 1.920 px, nén JPEG bắt đầu ở quality 82 và giữ file dưới 5 MiB.
+- File đã xử lý được lưu ổn định trong thư mục riêng của app và upload tới `connections/{connectionId}/posts/{postId}/{mediaId}.jpg`. Khi upload lỗi, Room chuyển `FAILED`; mở lại app khôi phục bài và nút retry dùng lại đúng ID, file và Storage path cũ.
+- Thêm Callable `finalizePhotoPost` yêu cầu Auth + App Check. Backend kiểm tra path, MIME, kích thước, dung lượng và metadata `authorId` của object thật; sau đó transaction kiểm tra connection/membership ACTIVE, tạo Post và cập nhật `connection.lastPostAt/updatedAt` cùng lúc. Gọi lại cùng dữ liệu trả kết quả cũ, không tạo bài trùng hoặc đổi `createdAt`.
+- Storage Rules chỉ cho member ACTIVE đọc; chỉ uploader được tạo/ghi lại đúng file JPEG, đúng metadata và tối đa 5 MiB. Client không được xóa media. Quyền liên dịch vụ `roles/firebaserules.firestoreServiceAgent` đã cấp cho Storage service agent để rule thật có thể đọc connection/member từ Firestore.
+- Home của người đăng đọc bài local từ Room và hiển thị đúng file đã xử lý. Đã sửa mapping cache local theo connection/post/media thay vì ghép trực tiếp Storage path.
+- Đã deploy `finalizePhotoPost` và Storage Rules lên `memento-fre`.
+
+### Bằng chứng kiểm tra
+
+- Android debug build thành công; APK cuối đã cài lên cả hai emulator.
+- 5 unit tests Functions đạt. Integration emulator đạt create/redeem invite và post finalize: membership, object metadata, atomic Post + `lastPostAt`, từ chối media sai và retry idempotent.
+- 9 kiểm tra Storage Rules đạt: member/outsider, path, MIME, dung lượng, overwrite của uploader khác và delete.
+- Kiểm thử thật trên U1: lần đầu giữ bài `FAILED` khi Storage từ chối; sau khi bổ sung IAM, mở lại app khôi phục bài, retry upload đạt 100% và quay về Home. Log callable xác nhận `auth: VALID`, `app: VALID`; Room xác nhận `SYNCED` và timestamp của Post trùng `connection.lastPostAt`.
+
+### Chốt bước 4
+
+Phía người gửi đã có đường đăng một ảnh thật, retry qua lần mở app mới và commit metadata an toàn. Firestore không thể atomic cùng Storage, nên file upload xong nhưng finalize thất bại vẫn có thể trở thành orphan; retry hiện tái sử dụng file đó, còn cleanup định kỳ thuộc bước 7.
+
+U2 chưa tự tải bài mới và chưa hiển thị ảnh remote vì post listener, pagination, download/cache là phạm vi bước 5. Vì vậy bước 4 xác nhận việc gửi và lưu server, chưa khẳng định hành trình chia sẻ hai chiều đã hoàn tất.
+
+### Tiếp theo — bước 5
+
+Mở quyền đọc Post đúng membership, đồng bộ từng connection theo trang 20 bài, nghe bài mới, lưu metadata vào Room, tải/cache ảnh Storage và hiển thị cùng một bài trên U2. Hoàn thiện trạng thái loading/lỗi và kiểm tra lại bằng hai tài khoản thật, gồm đóng/mở app và tránh ghi trùng Room.
+
+### Dọn dẹp trước bước 5 — 14/09/2026
+
+- Đã xóa các nhánh thư mục source trống còn lại từ migration, mapper/model connection và media pipeline cũ.
+- Đã chạy Gradle clean để xóa output build có thể tái tạo, gồm các thư mục bản sao có hậu tố ` 2`.
+- Sau khi dọn, toàn project không còn thư mục trống ngoài ba thư mục nội bộ chuẩn của Git (`objects/info`, `objects/pack`, `refs/tags`). Không có source hoặc cấu hình chức năng nào bị xóa trong đợt dọn dẹp này.
+
+### Sửa tên người nhận ở Create Post — 14/09/2026
+
+- DIRECT connection theo schema có `name = null`; Create Post trước đây fallback thành `Direct connection`, nên người dùng không biết đang chọn ai khi có nhiều connection.
+- Create Post giờ ghép member ACTIVE với profile đã đồng bộ và hiển thị `displayName (@username)`. ID dùng để đăng vẫn là `connectionId`, không gửi trực tiếp theo userId.
+- Preview dùng cùng nhãn người nhận để người dùng kiểm tra lại trước khi upload. Group sau này ưu tiên `connection.name`, có fallback riêng nếu thiếu tên.
+- Android debug build đạt; bản mới đã cài trên hai emulator. Kiểm tra thật: U1 thấy `u2 (@u2)` và U2 thấy `u1 (@u1)` trong Share with.
+- Home trước đó vẫn hiện `Direct connection` vì khi đọc `ConnectionEntity` từ Room, repository chuyển sang domain với danh sách members rỗng. Đã sửa mapping để nạp đầy đủ member của từng connection và dùng chung hàm tạo nhãn connection.
+- Kiểm tra bản cuối: chip cạnh `All` và nhãn trên Post của U1 đều là `u2 (@u2)`; chip Home của U2 là `u1 (@u1)`.
