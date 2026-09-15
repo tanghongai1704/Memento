@@ -2,6 +2,7 @@ package com.tangai.memento.feature.auth.data
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.functions.FirebaseFunctions
 import com.tangai.memento.database.dao.UserDao
 import com.tangai.memento.database.model.toEntity
 import com.tangai.memento.database.model.toDomain
@@ -21,6 +22,7 @@ import javax.inject.Inject
 class AuthRepositoryImpl @Inject constructor(
     private val firebaseAuthDataSource: FirebaseAuthDataSource,
     private val firestore: FirebaseFirestore,
+    private val functions: FirebaseFunctions,
     private val userDao: UserDao
 ) : AuthRepository {
 
@@ -80,6 +82,7 @@ class AuthRepositoryImpl @Inject constructor(
         val profile = ref.get().awaitTask().toProfile() ?: error("Invalid user profile.")
         check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) { "Account changed during sync." }
         userDao.upsertUser(profile.toEntity())
+        getCurrentUserInviteCode().getOrThrow()
     }
 
     override suspend fun getCurrentUserProfile(): Result<User> = runCatching {
@@ -96,6 +99,14 @@ class AuthRepositoryImpl @Inject constructor(
         }
         userDao.upsertUser(profile.toEntity())
         profile
+    }
+
+    override suspend fun getCurrentUserInviteCode(): Result<String> = runCatching {
+        val uid = firebaseAuthDataSource.currentUser()?.uid ?: error("User is not signed in.")
+        val data = functions.getHttpsCallable("getMyInviteCode")
+            .call().awaitTask().data as? Map<*, *> ?: error("Unexpected invite code response.")
+        check(firebaseAuthDataSource.currentUser()?.uid == uid) { "Account changed while loading invite code." }
+        data["code"] as? String ?: error("Invite code response is missing its code.")
     }
 
     override suspend fun updateCurrentUserProfile(

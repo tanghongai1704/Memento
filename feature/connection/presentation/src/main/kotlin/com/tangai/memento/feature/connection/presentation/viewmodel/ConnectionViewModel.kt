@@ -42,31 +42,6 @@ class ConnectionViewModel @Inject constructor(
         val formatted = if (normalized.length > 4) normalized.take(4) + "-" + normalized.drop(4) else normalized
         state.value = state.value.copy(redeemCode = formatted, errorMessage = null, successMessage = null)
     }
-    fun createInvite() {
-        val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
-            state.value = state.value.copy(isInviteActionRunning = true, errorMessage = null, successMessage = null)
-            val result = repository.createDirectInvite()
-            if (auth.currentUser?.uid == uid) state.value = state.value.copy(
-                inviteCode = result.getOrNull()?.code,
-                inviteExpiresAtMillis = result.getOrNull()?.expiresAtMillis,
-                isInviteActionRunning = false,
-                errorMessage = result.exceptionOrNull()?.userMessage()
-            )
-        }
-    }
-    fun revokeInvite() {
-        val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
-            state.value = state.value.copy(isInviteActionRunning = true, errorMessage = null, successMessage = null)
-            val result = repository.revokeDirectInvite()
-            if (auth.currentUser?.uid == uid) state.value = state.value.copy(
-                inviteCode = null, inviteExpiresAtMillis = null, isInviteActionRunning = false,
-                successMessage = if (result.isSuccess) "Invite revoked." else null,
-                errorMessage = result.exceptionOrNull()?.userMessage()
-            )
-        }
-    }
     fun redeemInvite() {
         val uid = auth.currentUser?.uid ?: return
         val code = state.value.redeemCode

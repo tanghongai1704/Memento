@@ -2,9 +2,6 @@ import {createHash, randomInt} from "node:crypto";
 
 export const DIRECT_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const DIRECT_CODE_LENGTH = 8;
-export const DIRECT_INVITE_TTL_MS = 10 * 60 * 1000;
-export const REDEEM_WINDOW_MS = 10 * 60 * 1000;
-export const MAX_REDEEM_ATTEMPTS = 5;
 
 export function normalizeInviteCode(value: unknown): string | null {
   if (typeof value !== "string") return null;

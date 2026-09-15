@@ -18,8 +18,6 @@ class ConnectionRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val source: ConnectionFirestoreDataSource
 ) : ConnectionRepository {
-    override suspend fun createDirectInvite() = runCatching { source.createDirectInvite() }
-
     override suspend fun redeemDirectInvite(code: String): Result<String> = runCatching {
         val connectionId = source.redeemDirectInvite(code)
         // The backend transaction has already committed. A cache refresh failure must not
@@ -27,8 +25,6 @@ class ConnectionRepositoryImpl @Inject constructor(
         getCurrentUserConnections()
         connectionId
     }
-
-    override suspend fun revokeDirectInvite() = runCatching { source.revokeDirectInvite() }
 
     override suspend fun getCurrentUserConnections(): Result<List<Connection>> = runCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")

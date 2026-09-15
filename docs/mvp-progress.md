@@ -152,6 +152,14 @@ U2 chưa tự tải bài mới và chưa hiển thị ảnh remote vì post list
 
 Mở quyền đọc Post đúng membership, đồng bộ từng connection theo trang 20 bài, nghe bài mới, lưu metadata vào Room, tải/cache ảnh Storage và hiển thị cùng một bài trên U2. Hoàn thiện trạng thái loading/lỗi và kiểm tra lại bằng hai tài khoản thật, gồm đóng/mở app và tránh ghi trùng Room.
 
+## 15/09/2026 — đơn giản hóa mã kết nối trước bản nộp
+
+- Thay invite tạm thời bằng một mã cố định cho mỗi user: tạo một lần sau khi profile sẵn sàng, hiển thị/share tại Profile, không expire, revoke hoặc consume.
+- `getMyInviteCode` trả lại cùng code khi gọi nhiều lần; tài khoản cũ được cấp code ở lần login/Profile đầu tiên nên không cần migration bắt buộc.
+- `redeemDirectInvite` dùng code lookup để tìm owner. Một code có thể được nhiều user khác nhau dùng; nhập lại bởi cùng một cặp trả connection cũ, không tạo document trùng.
+- Vẫn giữ Auth, App Check, self-connect guard, kiểm tra hai profile và `directConnectionLocks` transaction. Đã bỏ UI create/revoke/countdown và các nhánh expiry/rate-limit/usedCount của flow nộp bài.
+- Android compile debug, Functions type-check, integration emulator và 22 Rules checks đều đạt. `getMyInviteCode`, `redeemDirectInvite`, `finalizePhotoPost` cùng Rules mới đã deploy lên Firebase thật; hai function create/revoke cũ đã xóa.
+
 ### Dọn dẹp trước bước 5 — 14/09/2026
 
 - Đã xóa các nhánh thư mục source trống còn lại từ migration, mapper/model connection và media pipeline cũ.

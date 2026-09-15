@@ -7,17 +7,15 @@ Firestore dùng Timestamp cho thời gian server; domain/Room dùng epoch millis
 `displayName: String`, `username: String`, `usernameNormalized: String`, `avatarPath: String?`, `bio: String?`, `createdAt: Timestamp`, `updatedAt: Timestamp`, `schemaVersion: Number`.
 UID = Firebase Auth UID. Không lưu email, uid field, friendList hoặc connection snapshots. Username dài 2–30 ký tự, bắt đầu bằng chữ/số, chỉ gồm chữ Latin/số/`.`/`_`; `usernameNormalized` bằng lowercase Locale.ROOT và được Rules kiểm tra. Search exact `whereEqualTo(usernameNormalized, normalized).limit(20)`; lookup UID dùng document get. Không cam kết username unique. Bio tối đa 500, displayName tối đa 100 ký tự.
 
-## invites/{codeHash}
+## Mã kết nối cố định
 
-`purpose: DIRECT_PAIR | GROUP_JOIN`, `createdBy: UID`, `targetConnectionId: String?`, `maxUses: Number`, `usedCount: Number`, `status: ACTIVE | USED | EXPIRED | REVOKED`, `createdAt: Timestamp`, `expiresAt: Timestamp`, `revokedAt: Timestamp?`, `schemaVersion: 1`.
+`userInviteCodes/{uid}` lưu `code`, `codeHash`, `createdAt`, `schemaVersion`. `inviteCodeLookup/{codeHash}` lưu `ownerUid`, `createdAt`, `schemaVersion`. Cả hai collection chỉ backend được đọc/ghi; raw code chỉ được Callable `getMyInviteCode` trả cho đúng user đang đăng nhập.
 
-Normalize code: trim, bỏ dấu '-', uppercase; SHA-256 làm document ID. Không lưu raw code và client không được đọc/list invites. Bước 3 đã triển khai generator/redeemer/revoke trong Callable Functions và UI tạo, nhập, chia sẻ mã.
+Code được normalize bằng trim, bỏ dấu `-`, uppercase và SHA-256 để tra lookup. Mỗi user có một code được tạo một lần sau khi profile sẵn sàng; tài khoản cũ được tạo lazy ở lần login/Profile đầu tiên. Code không expire, không revoke, không có `usedCount` và được dùng lại để nhiều user khác nhau kết nối với owner.
 
-Redeem direct đọc dữ liệu cần thiết trước khi write trong cùng transaction: rate limit, invite, hai profile và khóa unique. Backend kiểm tra ACTIVE, thời gian server trước expiresAt, usedCount < maxUses, không tự redeem và chưa có direct ACTIVE. Direct maxUses = 1. Group vẫn chưa triển khai; khi làm phải kiểm tra connection đúng loại/ACTIVE/chưa đầy.
+Redeem direct đọc lookup, hai profile và khóa unique trong một transaction. Backend chặn tự kết nối. Nếu cặp đã có direct ACTIVE, backend trả lại connectionId cũ để retry không tạo trùng. Nếu chưa có, transaction tạo connection Auto ID và hai member documents. `directKey` là SHA-256 của JSON array hai UID đã sort; document cùng ID trong `directConnectionLocks` bảo đảm uniqueness khi concurrent.
 
-Tạo direct dùng Auto ID được sinh ngoài callback retry, lưu connection, hai member document, invite và lock trong cùng transaction. `directKey` là SHA-256 của JSON array hai UID đã sort; document cùng ID trong `directConnectionLocks` bảo đảm uniqueness khi concurrent. `directInviteOwners/{uid}` giữ con trỏ invite hiện tại để tạo mã mới revoke mã cũ. `inviteRedeemRateLimits/{uid}` giới hạn 5 lượt thử trong 10 phút. Ba collection này là dữ liệu backend và Rules cấm toàn bộ client access.
-
-Group join cập nhật memberIds, member document, usedCount; USED khi đạt maxUses. Leave/remove giữ member document, cập nhật LEFT/REMOVED và audit đồng thời với memberIds. Owner phải chuyển quyền hoặc đóng group trước khi rời. Rejoin và quyền xem bài trước joinedAt cần chốt trước triển khai; hiện chưa expose posts remote.
+Leave/remove giữ member document, cập nhật LEFT/REMOVED và audit đồng thời với memberIds. Owner phải chuyển quyền hoặc đóng group trước khi rời. Rejoin và quyền xem bài trước joinedAt cần chốt trước triển khai; hiện chưa expose posts remote.
 
 ## connections/{connectionId}
 
@@ -54,6 +52,6 @@ Với dữ liệu legacy còn gặp ở môi trường khác, export/backup trư
 
 ## Rules và triển khai
 
-`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Invite, lock, rate-limit, connection/member mutation và Post vẫn khóa client write; Admin SDK trong Functions thực hiện direct invite và finalize post. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình. `firebase.json` quản lý Rules/index/Functions và Emulator, gồm Storage Emulator. Ba Callable invite đã deploy ngày 13/09/2026; `finalizePhotoPost` và Storage Rules đã deploy ngày 14/09/2026; hai indexes READY. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
+`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Mã kết nối, lookup, lock, connection/member mutation và Post vẫn khóa client write; Admin SDK trong Functions thực hiện redeem và finalize post. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình. `firebase.json` quản lý Rules/index/Functions và Emulator, gồm Storage Emulator. Hai indexes đang READY. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
 
 Rules không lọc dữ liệu sau query; điều kiện query phải phù hợp quyền đọc. Tham khảo [Firebase query rules](https://firebase.google.com/docs/firestore/security/rules-query) và [transaction](https://firebase.google.com/docs/firestore/manage-data/transactions).

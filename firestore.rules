@@ -58,5 +58,13 @@ service cloud.firestore {
     match /inviteRedeemRateLimits/{uid} {
       allow read, write: if false;
     }
+    match /userInviteCodes/{uid} {
+      // The stable raw code is returned only to its owner by the Callable backend.
+      allow read, write: if false;
+    }
+    match /inviteCodeLookup/{codeHash} {
+      // Codes are resolved by the Callable backend; clients cannot enumerate the lookup.
+      allow read, write: if false;
+    }
   }
 }

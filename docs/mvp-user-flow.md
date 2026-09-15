@@ -6,7 +6,7 @@ MVP đầu ưu tiên DIRECT + một ảnh. Phạm vi, giới hạn và quyền l
 
 DIRECT có hai người và không chuyển thành GROUP. GROUP có owner và giới hạn thành viên. Tạo người thứ ba trong cuộc trò chuyện 1-1 phải tạo group mới để không lộ lịch sử direct.
 
-Ghép đôi direct dùng mã 8 ký tự có hiệu lực 10 phút và dùng một lần. A tạo/chia sẻ code; B nhập code; Callable transaction tạo connection và hai membership. Tạo code mới tự revoke code cũ; A có thể revoke thủ công. Backend chặn tự redeem, cặp direct trùng và quá 5 lượt thử trong 10 phút. GROUP invite chưa triển khai.
+Mỗi tài khoản có một mã kết nối 8 ký tự cố định, được backend tạo một lần sau khi profile sẵn sàng và hiển thị tại Profile. A chia sẻ mã; B nhập mã tại Connections; Callable transaction tạo connection và hai membership. Mã không hết hạn, không bị consume và có thể được nhiều user khác nhau sử dụng. Backend vẫn chặn tự kết nối; khóa theo cặp UID làm lần nhập lặp lại trả về connection cũ thay vì tạo trùng. GROUP invite chưa triển khai.
 
 Create Post hiển thị người còn lại trong DIRECT dưới dạng `displayName (@username)` nhưng lưu lựa chọn bằng connectionId. Người dùng chọn một connection ACTIVE, chọn đúng một ảnh và caption tùy chọn. App lưu PENDING trong Room, sửa hướng/resize/nén JPEG, upload Storage, gọi backend transaction tạo Post + cập nhật lastPostAt rồi chuyển local sang SYNCED. Nếu lỗi, bài chuyển FAILED và được khôi phục để retry cùng ID sau khi mở lại app. Home người gửi đọc bài và file local từ Room/cache. Post không hết hạn theo invite.
 

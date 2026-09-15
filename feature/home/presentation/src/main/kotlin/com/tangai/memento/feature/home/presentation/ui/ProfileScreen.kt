@@ -1,5 +1,6 @@
 package com.tangai.memento.feature.home.presentation.ui
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,6 +32,7 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -36,7 +40,17 @@ fun ProfileScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Profile", style = MaterialTheme.typography.headlineLarge)
+
+        Text(
+            text = "Profile",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+        )
+
         if (state.isLoading) {
             CircularProgressIndicator()
             return@Column
@@ -45,6 +59,27 @@ fun ProfileScreen(
         state.successMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         if (state.email.isNotBlank()) {
             Text(state.email, style = MaterialTheme.typography.bodyMedium)
+        }
+        if (state.inviteCode.isNotBlank()) {
+            Text("Your invite code", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = state.inviteCode,
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                supportingText = { Text("This code is permanent and can be used by people who want to connect with you.") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedButton(
+                onClick = {
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "Connect with me on Memento using code ${state.inviteCode}.")
+                    }
+                    context.startActivity(Intent.createChooser(share, "Share invite code"))
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Share invite code") }
         }
         OutlinedTextField(
             value = state.displayName,

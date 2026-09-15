@@ -7,7 +7,6 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.tangai.memento.feature.auth.data.source.util.awaitTask
 import com.tangai.memento.feature.auth.data.mapper.toProfile
 import com.tangai.memento.domain.model.*
-import com.tangai.memento.feature.connection.domain.DirectInviteCode
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -19,24 +18,10 @@ class ConnectionFirestoreDataSource @Inject constructor(
     private val auth: FirebaseAuth,
     private val functions: FirebaseFunctions
 ) {
-    suspend fun createDirectInvite(): DirectInviteCode {
-        val data = functions.getHttpsCallable("createDirectInvite").call().awaitTask().data.asMap()
-        return DirectInviteCode(
-            code = data["code"] as? String ?: error("Invite response is missing its code."),
-            expiresAtMillis = (data["expiresAtMillis"] as? Number)?.toLong()
-                ?: error("Invite response is missing its expiry.")
-        )
-    }
-
     suspend fun redeemDirectInvite(code: String): String {
         val data = functions.getHttpsCallable("redeemDirectInvite")
             .call(mapOf("code" to code)).awaitTask().data.asMap()
         return data["connectionId"] as? String ?: error("Redeem response is missing its connection.")
-    }
-
-    suspend fun revokeDirectInvite(): Boolean {
-        val data = functions.getHttpsCallable("revokeDirectInvite").call().awaitTask().data.asMap()
-        return data["revoked"] as? Boolean ?: false
     }
 
     suspend fun getConnectionsForCurrentUser(): List<Connection> {

@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 data class ProfileUiState(
     val user: User? = null,
     val email: String = "",
+    val inviteCode: String = "",
     val displayName: String = "",
     val username: String = "",
     val bio: String = "",
@@ -45,15 +46,21 @@ class ProfileViewModel @Inject constructor(
     fun loadProfile() {
         viewModelScope.launch {
             state.value = state.value.copy(isLoading = true, errorMessage = null)
-            repository.getCurrentUserProfile().fold(
-                onSuccess = ::showUser,
-                onFailure = { error ->
-                    state.value = state.value.copy(
-                        isLoading = false,
-                        errorMessage = error.message ?: "Could not load profile."
-                    )
-                }
-            )
+            val profile = repository.getCurrentUserProfile().getOrElse { error ->
+                state.value = state.value.copy(
+                    isLoading = false,
+                    errorMessage = error.message ?: "Could not load profile."
+                )
+                return@launch
+            }
+            showUser(profile)
+            val inviteCode = repository.getCurrentUserInviteCode().getOrElse { error ->
+                state.value = state.value.copy(
+                    errorMessage = error.message ?: "Could not load invite code."
+                )
+                return@launch
+            }
+            state.value = state.value.copy(inviteCode = inviteCode)
         }
     }
 
@@ -90,7 +97,9 @@ class ProfileViewModel @Inject constructor(
                 username = current.username,
                 bio = current.bio
             ).fold(
-                onSuccess = { showUser(it, "Profile updated.") },
+                onSuccess = {
+                    showUser(it, successMessage = "Profile updated.", inviteCode = current.inviteCode)
+                },
                 onFailure = { error ->
                     state.value = state.value.copy(
                         isSaving = false,
@@ -101,10 +110,11 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    private fun showUser(user: User, successMessage: String? = null) {
+    private fun showUser(user: User, successMessage: String? = null, inviteCode: String = state.value.inviteCode) {
         state.value = ProfileUiState(
             user = user,
             email = repository.currentUserEmail().orEmpty(),
+            inviteCode = inviteCode,
             displayName = user.displayName,
             username = user.username,
             bio = user.bio.orEmpty(),

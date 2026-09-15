@@ -22,7 +22,7 @@ Cả 3 profile đã migrate và kiểm tra lại; tài khoản Auth giữ nguyê
 
 Bước 2 đã deploy Rules validation username chặt hơn và xác nhận remote khớp repo. Snapshot kiểm tra sau bước 2 nằm trong `.local/firebase-audit/after-step2/`. Profile edit và password reset được kiểm tra bằng Emulator; không gửi reset mail tới tài khoản thật.
 
-Bước 3 đã deploy `createDirectInvite`, `redeemDirectInvite`, `revokeDirectInvite` Gen 2 và Rules khóa invite/collection nội bộ. Android App Check đã tích hợp Debug provider cho debug và Play Integrity cho release; SHA-256 debug certificate đã đăng ký trên Firebase. Lần đầu chạy debug app trên thiết bị/emulator, lấy debug token trong log và đăng ký tại Firebase Console → App Check → Manage debug tokens; không commit token. Play Integrity config có TTL 1 giờ; signing certificate phát hành thật cần bổ sung khi có release key/Play App Signing.
+Ngày 15/09/2026 đã deploy `getMyInviteCode`, `redeemDirectInvite`, `finalizePhotoPost` và Rules mới tại `asia-southeast1`; hai function tạm thời `createDirectInvite` và `revokeDirectInvite` đã xóa. Android App Check đã tích hợp Debug provider cho debug và Play Integrity cho release; SHA-256 debug certificate đã đăng ký trên Firebase. Lần đầu chạy debug app trên thiết bị/emulator, lấy debug token trong log và đăng ký tại Firebase Console → App Check → Manage debug tokens; không commit token. Play Integrity config có TTL 1 giờ; signing certificate phát hành thật cần bổ sung khi có release key/Play App Signing.
 
 Artifact Registry ở `asia-southeast1` tự xóa function images cũ hơn 7 ngày để tránh tích lũy storage.
 

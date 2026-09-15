@@ -64,7 +64,8 @@ call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'users'}],
     'where': {'fieldFilter': {'field': {'fieldPath': 'usernameNormalized'}, 'op': 'EQUAL', 'value': {'stringValue': 'alice'}}}}})
 call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'limit': 20}}, expected=403)
 call('/invites/known-hash', 'a', expected=403)
-for internal_collection in ['directInviteOwners', 'directConnectionLocks', 'inviteRedeemRateLimits']:
+for internal_collection in ['directInviteOwners', 'directConnectionLocks', 'inviteRedeemRateLimits',
+                            'userInviteCodes', 'inviteCodeLookup']:
     call('/' + internal_collection + '/test', 'a', expected=403)
 call(':commit', 'a', {'writes': [{'update': {
     'name': name + '/directInviteOwners/a', 'fields': {'codeHash': {'stringValue': 'forged'}}}}]}, expected=403)
