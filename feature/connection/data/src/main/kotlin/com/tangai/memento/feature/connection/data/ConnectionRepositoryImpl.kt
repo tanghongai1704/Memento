@@ -38,7 +38,7 @@ class ConnectionRepositoryImpl @Inject constructor(
             // Revoke cached access when a connection closes or membership disappears.
             database.connectionMemberDao().getActiveMembershipsForUser(uid).forEach { membership ->
                 if (connections.none { it.id == membership.connectionId }) {
-                    database.connectionMemberDao().upsertMember(membership.copy(status = "LEFT"))
+                    database.connectionMemberDao().upsertMember(membership.copy(status = MemberStatus.LEFT))
                 }
             }
             connections.forEach { connection ->

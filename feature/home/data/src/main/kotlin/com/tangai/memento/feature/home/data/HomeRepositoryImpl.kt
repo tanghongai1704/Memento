@@ -19,7 +19,7 @@ class HomeRepositoryImpl @Inject constructor(private val database: MementoDataba
         connections.getCurrentUserConnections().getOrThrow()
         database.connectionMemberDao().getActiveMembershipsForUser(uid).mapNotNull { member ->
             database.connectionDao().getConnectionById(member.connectionId)
-                ?.takeIf { it.status == "ACTIVE" }
+                ?.takeIf { it.status == ConnectionStatus.ACTIVE }
                 ?.let { connection ->
                     connection.toDomain(
                         database.connectionMemberDao().getMembersByConnectionId(connection.id)

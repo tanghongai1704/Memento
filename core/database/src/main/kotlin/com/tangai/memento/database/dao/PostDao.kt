@@ -3,6 +3,7 @@ package com.tangai.memento.database.dao
 import androidx.room.*
 import com.tangai.memento.database.model.*
 import com.tangai.memento.domain.model.Post
+import com.tangai.memento.domain.model.LocalSyncStatus
 
 @Dao
 abstract class PostDao {
@@ -41,7 +42,7 @@ abstract class PostDao {
     abstract suspend fun updateSyncState(
         connectionId: String,
         postId: String,
-        syncStatus: String,
+        syncStatus: LocalSyncStatus,
         createdAt: Long? = null,
         updatedAt: Long? = null
     )

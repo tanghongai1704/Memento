@@ -1,5 +1,13 @@
 import {Firestore, Timestamp} from "firebase-admin/firestore";
 import {FinalizePhotoInput} from "./postCore";
+import {
+  ConnectionStatus,
+  LayoutType,
+  MediaType,
+  MemberStatus,
+  PostStatus,
+  PostType,
+} from "./schema";
 
 export type MediaVerifier = (input: FinalizePhotoInput) => Promise<boolean>;
 
@@ -32,13 +40,13 @@ export async function finalizePhotoPost(
       const media = Array.isArray(mediaItems) && mediaItems.length === 1 ? mediaItems[0] : null;
       const samePost = existingPost.get("authorId") === uid &&
         existingPost.get("connectionId") === input.connectionId &&
-        existingPost.get("postType") === "PHOTO" &&
-        existingPost.get("layoutType") === "SINGLE" &&
+        existingPost.get("postType") === PostType.PHOTO &&
+        existingPost.get("layoutType") === LayoutType.SINGLE &&
         existingPost.get("caption") === input.caption &&
         existingPost.get("clientCreatedAt") === input.clientCreatedAt &&
-        existingPost.get("status") === "ACTIVE" &&
+        existingPost.get("status") === PostStatus.ACTIVE &&
         media?.mediaId === input.mediaId &&
-        media?.mediaType === "IMAGE" &&
+        media?.mediaType === MediaType.IMAGE &&
         media?.storagePath === input.storagePath &&
         media?.thumbnailPath === null &&
         media?.mimeType === input.mimeType &&
@@ -54,20 +62,21 @@ export async function finalizePhotoPost(
     }
 
     const memberIds = connection.get("memberIds");
-    const active = connection.exists && connection.get("status") === "ACTIVE" &&
+    const active = connection.exists &&
+      connection.get("status") === ConnectionStatus.ACTIVE &&
       Array.isArray(memberIds) && memberIds.includes(uid) &&
-      member.exists && member.get("status") === "ACTIVE";
+      member.exists && member.get("status") === MemberStatus.ACTIVE;
     if (!active) return {ok: false, reason: "NOT_ACTIVE_MEMBER"};
 
     transaction.create(postRef, {
       connectionId: input.connectionId,
       authorId: uid,
-      postType: "PHOTO",
-      layoutType: "SINGLE",
+      postType: PostType.PHOTO,
+      layoutType: LayoutType.SINGLE,
       caption: input.caption,
       mediaItems: [{
         mediaId: input.mediaId,
-        mediaType: "IMAGE",
+        mediaType: MediaType.IMAGE,
         storagePath: input.storagePath,
         thumbnailPath: null,
         mimeType: input.mimeType,
@@ -80,7 +89,7 @@ export async function finalizePhotoPost(
       clientCreatedAt: input.clientCreatedAt,
       createdAt: now,
       updatedAt: now,
-      status: "ACTIVE",
+      status: PostStatus.ACTIVE,
       deletedAt: null,
       deletedBy: null,
       schemaVersion: 1,

@@ -10,8 +10,8 @@ import com.tangai.memento.domain.model.ConnectionMember
 @Entity(tableName = "connections", indices = [androidx.room.Index("status")])
 data class ConnectionEntity(
     @PrimaryKey val id: String,
-    val type: String,
-    val status: String,
+    val type: ConnectionType,
+    val status: ConnectionStatus,
     val name: String? = null,
     val ownerId: String? = null,
     val maxMembers: Int = 2,
@@ -25,9 +25,9 @@ data class ConnectionEntity(
 
 fun ConnectionEntity.toDomain(members: List<ConnectionMember> = emptyList()): Connection = Connection(
     id = id,
-    type = ConnectionType.valueOf(type),
+    type = type,
     members = members,
-    status = ConnectionStatus.valueOf(status),
+    status = status,
     name = name,
     ownerId = ownerId,
     maxMembers = maxMembers,
@@ -41,8 +41,8 @@ fun ConnectionEntity.toDomain(members: List<ConnectionMember> = emptyList()): Co
 
 fun Connection.toEntity(): ConnectionEntity = ConnectionEntity(
     id = id,
-    type = type.name,
-    status = status.name,
+    type = type,
+    status = status,
     name = name,
     ownerId = ownerId,
     maxMembers = maxMembers,

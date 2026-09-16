@@ -19,7 +19,7 @@ Leave/remove giữ member document, cập nhật LEFT/REMOVED và audit đồng 
 
 ## connections/{connectionId}
 
-Auto ID; fields: `type: DIRECT | GROUP`, `name: String?`, `memberIds: List<UID>` (chỉ ACTIVE), `createdBy: UID`, `ownerId: UID?`, `maxMembers: Number`, `status: PENDING | ACTIVE | CLOSED`, `directKey: String?`, `lastPostAt: Timestamp?`, `createdAt: Timestamp`, `updatedAt: Timestamp`, `schemaVersion: 1`.
+Auto ID; fields: `type: DIRECT | GROUP`, `name: String?`, `memberIds: List<UID>` (chỉ ACTIVE), `createdBy: UID`, `ownerId: UID?`, `maxMembers: Number`, `status: ACTIVE | CLOSED`, `directKey: String?`, `lastPostAt: Timestamp?`, `createdAt: Timestamp`, `updatedAt: Timestamp`, `schemaVersion: 1`. Group được tạo hoàn chỉnh trong một transaction nên connection không có trạng thái `PENDING`; nếu sau này cần chờ người được mời xác nhận thì trạng thái chờ thuộc member, không thuộc connection.
 
 Phải lưu `lastPostAt: null` ngay cả khi chưa có post để document không thiếu field orderBy. Domain/Room dùng members làm dữ liệu membership; memberIds là chỉ mục remote, không cần sao chép JSON array vào Room.
 

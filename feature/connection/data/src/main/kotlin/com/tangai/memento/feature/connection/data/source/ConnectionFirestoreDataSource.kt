@@ -28,19 +28,20 @@ class ConnectionFirestoreDataSource @Inject constructor(
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         return firestore.collection("connections")
             .whereArrayContains("memberIds", uid)
-            .whereEqualTo("status", "ACTIVE")
+            .whereEqualTo("status", ConnectionStatus.ACTIVE.name)
             .orderBy("lastPostAt", Query.Direction.DESCENDING)
             .get().awaitTask().documents.map { doc ->
                 val members = doc.reference.collection("members").get().awaitTask().documents.map { member ->
                     ConnectionMember(userId = member.id,
-                        role = requireNotNull(member.getString("role")),
+                        role = MemberRole.valueOf(requireNotNull(member.getString("role"))),
                         status = MemberStatus.valueOf(requireNotNull(member.getString("status"))),
                         joinedAt = member.getTimestamp("joinedAt")?.toDate()?.time ?: 0,
                         leftAt = member.getTimestamp("leftAt")?.toDate()?.time,
                         invitedBy = member.getString("invitedBy"), removedBy = member.getString("removedBy"))
                 }
                 Connection(id = doc.id, type = ConnectionType.valueOf(requireNotNull(doc.getString("type"))),
-                    members = members, status = ConnectionStatus.ACTIVE,
+                    members = members,
+                    status = ConnectionStatus.valueOf(requireNotNull(doc.getString("status"))),
                     name = doc.getString("name"), createdBy = requireNotNull(doc.getString("createdBy")),
                     ownerId = doc.getString("ownerId"), maxMembers = requireNotNull(doc.getLong("maxMembers")).toInt(),
                     directKey = doc.getString("directKey"), lastPostAt = doc.getTimestamp("lastPostAt")?.toDate()?.time,
@@ -58,7 +59,7 @@ class ConnectionFirestoreDataSource @Inject constructor(
         }
         val registration = firestore.collection("connections")
             .whereArrayContains("memberIds", uid)
-            .whereEqualTo("status", "ACTIVE")
+            .whereEqualTo("status", ConnectionStatus.ACTIVE.name)
             .orderBy("lastPostAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 when {

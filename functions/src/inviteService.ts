@@ -6,6 +6,12 @@ import {
   normalizeInviteCode,
   sha256,
 } from "./inviteCore";
+import {
+  ConnectionStatus,
+  ConnectionType,
+  MemberRole,
+  MemberStatus,
+} from "./schema";
 
 type RedeemFailure =
   | "INVALID_INVITE"
@@ -14,8 +20,6 @@ type RedeemFailure =
 export type RedeemResult =
   | {ok: true; connectionId: string}
   | {ok: false; reason: RedeemFailure};
-
-const ACTIVE = "ACTIVE";
 
 export async function getMyInviteCode(
   db: Firestore,
@@ -86,7 +90,7 @@ export async function redeemDirectInvite(
     const directKey = directKeyFor(creatorUid, uid);
     const lockRef = db.collection("directConnectionLocks").doc(directKey);
     const lockSnapshot = await transaction.get(lockRef);
-    if (lockSnapshot.exists && lockSnapshot.get("status") === ACTIVE) {
+    if (lockSnapshot.exists && lockSnapshot.get("status") === ConnectionStatus.ACTIVE) {
       const connectionId = lockSnapshot.get("connectionId");
       return typeof connectionId === "string" ?
         {ok: true, connectionId} : {ok: false, reason: "INVALID_INVITE"};
@@ -94,13 +98,13 @@ export async function redeemDirectInvite(
 
     const memberIds = [creatorUid, uid].sort();
     transaction.create(connectionRef, {
-      type: "DIRECT",
+      type: ConnectionType.DIRECT,
       name: null,
       memberIds,
       createdBy: creatorUid,
       ownerId: null,
       maxMembers: 2,
-      status: ACTIVE,
+      status: ConnectionStatus.ACTIVE,
       directKey,
       lastPostAt: null,
       createdAt: now,
@@ -109,8 +113,8 @@ export async function redeemDirectInvite(
     });
     transaction.create(connectionRef.collection("members").doc(creatorUid), {
       userId: creatorUid,
-      role: "MEMBER",
-      status: ACTIVE,
+      role: MemberRole.MEMBER,
+      status: MemberStatus.ACTIVE,
       joinedAt: now,
       leftAt: null,
       invitedBy: null,
@@ -118,8 +122,8 @@ export async function redeemDirectInvite(
     });
     transaction.create(connectionRef.collection("members").doc(uid), {
       userId: uid,
-      role: "MEMBER",
-      status: ACTIVE,
+      role: MemberRole.MEMBER,
+      status: MemberStatus.ACTIVE,
       joinedAt: now,
       leftAt: null,
       invitedBy: creatorUid,
@@ -128,7 +132,7 @@ export async function redeemDirectInvite(
     transaction.set(lockRef, {
       connectionId: connectionRef.id,
       memberIds,
-      status: ACTIVE,
+      status: ConnectionStatus.ACTIVE,
       createdAt: now,
       updatedAt: now,
       schemaVersion: 1,

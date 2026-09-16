@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import com.tangai.memento.domain.model.ConnectionMember
+import com.tangai.memento.domain.model.MemberRole
 import com.tangai.memento.domain.model.MemberStatus
 
 @Entity(
@@ -25,9 +26,9 @@ import com.tangai.memento.domain.model.MemberStatus
 data class ConnectionMemberEntity(
     val connectionId: String,
     val userId: String,
-    val role: String,
+    val role: MemberRole,
     val joinedAt: Long,
-    val status: String,
+    val status: MemberStatus,
     val leftAt: Long? = null,
     val invitedBy: String? = null,
     val removedBy: String? = null
@@ -38,7 +39,7 @@ fun ConnectionMemberEntity.toDomain(): ConnectionMember = ConnectionMember(
     role = role,
     joinedAt = joinedAt,
     leftAt = leftAt, invitedBy = invitedBy, removedBy = removedBy,
-    status = MemberStatus.valueOf(status)
+    status = status
 )
 
 fun ConnectionMember.toEntity(connectionId: String): ConnectionMemberEntity = ConnectionMemberEntity(
@@ -47,5 +48,5 @@ fun ConnectionMember.toEntity(connectionId: String): ConnectionMemberEntity = Co
     role = role,
     joinedAt = joinedAt,
     leftAt = leftAt, invitedBy = invitedBy, removedBy = removedBy,
-    status = status.name
+    status = status
 )

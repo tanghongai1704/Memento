@@ -15,8 +15,14 @@ import com.tangai.memento.database.model.MediaItemEntity
 import com.tangai.memento.database.model.PostEntity
 import com.tangai.memento.database.model.toDomain
 import com.tangai.memento.domain.model.LocalMediaItem
+import com.tangai.memento.domain.model.ConnectionStatus
+import com.tangai.memento.domain.model.LayoutType
+import com.tangai.memento.domain.model.LocalSyncStatus
 import com.tangai.memento.domain.model.MediaType
+import com.tangai.memento.domain.model.MemberStatus
 import com.tangai.memento.domain.model.Post
+import com.tangai.memento.domain.model.PostStatus
+import com.tangai.memento.domain.model.PostType
 import com.tangai.memento.feature.post.domain.PendingPhotoPost
 import com.tangai.memento.feature.post.domain.PostRepository
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -45,7 +51,7 @@ class PostRepositoryImpl @Inject constructor(
         require((cleanCaption?.length ?: 0) <= 1000) { "Caption must be 1,000 characters or fewer." }
         val connection = database.connectionDao().getConnectionById(connectionId)
         val membership = database.connectionMemberDao().getMember(connectionId, uid)
-        check(connection?.status == "ACTIVE" && membership?.status == "ACTIVE") {
+        check(connection?.status == ConnectionStatus.ACTIVE && membership?.status == MemberStatus.ACTIVE) {
             "This connection is no longer active."
         }
 
@@ -55,10 +61,10 @@ class PostRepositoryImpl @Inject constructor(
         val clientCreatedAt = System.currentTimeMillis()
         val pendingEntity = PostEntity(
             id = postId, connectionId = connectionId, authorId = uid,
-            postType = "PHOTO", layoutType = "SINGLE", caption = cleanCaption,
+            postType = PostType.PHOTO, layoutType = LayoutType.SINGLE, caption = cleanCaption,
             clientCreatedAt = clientCreatedAt, createdAt = null, updatedAt = null,
-            status = "ACTIVE", deletedAt = null, deletedBy = null,
-            schemaVersion = 1, localSyncStatus = "PENDING"
+            status = PostStatus.ACTIVE, deletedAt = null, deletedBy = null,
+            schemaVersion = 1, localSyncStatus = LocalSyncStatus.PENDING
         )
         database.postDao().upsertPost(pendingEntity)
 
@@ -67,7 +73,7 @@ class PostRepositoryImpl @Inject constructor(
             val storagePath = storagePath(connectionId, postId, mediaId)
             val mediaEntity = MediaItemEntity(
                 connectionId = connectionId, postId = postId, mediaId = mediaId,
-                mediaType = "IMAGE", storagePath = storagePath, thumbnailPath = null,
+                mediaType = MediaType.IMAGE, storagePath = storagePath, thumbnailPath = null,
                 mimeType = "image/jpeg", width = processed.width, height = processed.height,
                 durationMs = null, sizeBytes = processed.sizeBytes, position = 0
             )
@@ -77,7 +83,7 @@ class PostRepositoryImpl @Inject constructor(
                 localUri = processed.file.toUri().toString()
             )
         } catch (error: Throwable) {
-            database.postDao().updateSyncState(connectionId, postId, "FAILED")
+            database.postDao().updateSyncState(connectionId, postId, LocalSyncStatus.FAILED)
             throw error
         }
     }
@@ -121,12 +127,18 @@ class PostRepositoryImpl @Inject constructor(
             val updatedAt = (response["updatedAtMillis"] as? Number)?.toLong() ?: createdAt
             check(auth.currentUser?.uid == uid) { "Account changed during upload." }
             database.withTransaction {
-                database.postDao().updateSyncState(post.connectionId, post.id, "SYNCED", createdAt, updatedAt)
+                database.postDao().updateSyncState(
+                    post.connectionId,
+                    post.id,
+                    LocalSyncStatus.SYNCED,
+                    createdAt,
+                    updatedAt
+                )
                 database.connectionDao().updateActivity(post.connectionId, createdAt, updatedAt)
             }
             post.copy(createdAt = createdAt, updatedAt = updatedAt)
         } catch (error: Throwable) {
-            database.postDao().updateSyncState(post.connectionId, post.id, "FAILED")
+            database.postDao().updateSyncState(post.connectionId, post.id, LocalSyncStatus.FAILED)
             throw error
         }
     }
