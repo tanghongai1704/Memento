@@ -2,6 +2,7 @@ package com.tangai.memento.feature.home.data
 
 import android.content.Context
 import androidx.room.withTransaction
+import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -35,12 +36,20 @@ class HomeRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
     private val connections: com.tangai.memento.feature.connection.domain.ConnectionRepository) : HomeRepository {
+    private val postSyncMutex = Mutex()
+    private val paginationLock = Any()
+    private var paginationUid: String? = null
+    private val activeConnectionIds = mutableSetOf<String>()
+    private val pageCursors = mutableMapOf<String, DocumentSnapshot>()
+    private val pageHasMore = mutableMapOf<String, Boolean>()
+    private val connectionsWithOlderPages = mutableSetOf<String>()
+
     override suspend fun loadPosts(): Result<List<Post>> = runCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         database.postDao().loadPosts(uid).also { check(auth.currentUser?.uid == uid) }
     }
 
-    override fun observePosts(): Flow<Result<List<Post>>> = callbackFlow {
+    override fun observePosts(): Flow<Result<PostFeedPage>> = callbackFlow {
         val uid = auth.currentUser?.uid
         if (uid == null) {
             close(IllegalStateException("User is not signed in."))
@@ -48,13 +57,9 @@ class HomeRepositoryImpl @Inject constructor(
         }
 
         val postListeners = mutableMapOf<String, ListenerRegistration>()
-        val syncMutex = Mutex()
+        synchronized(paginationLock) { resetPagination(uid) }
 
-        fun listenToPosts(connectionId: String) = firestore.collection("connections")
-            .document(connectionId)
-            .collection("posts")
-            .whereEqualTo("status", PostStatus.ACTIVE.name)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
+        fun listenToPosts(connectionId: String) = postsQuery(connectionId)
             .limit(POST_PAGE_SIZE)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -66,18 +71,18 @@ class HomeRepositoryImpl @Inject constructor(
                 launch {
                     try {
                         check(auth.currentUser?.uid == uid) { "Account changed during post sync." }
-                        val (posts, cacheError) = syncMutex.withLock {
-                            var firstCacheError: Throwable? = null
-                            snapshot.documents.forEach { document ->
-                                val media = storePost(connectionId, document)
-                                media.forEach { item ->
-                                    runCatching { cacheMedia(item) }
-                                        .onFailure { if (firstCacheError == null) firstCacheError = it }
-                                }
+                        synchronized(paginationLock) {
+                            if (paginationUid == uid && connectionId in activeConnectionIds &&
+                                connectionId !in connectionsWithOlderPages) {
+                                snapshot.documents.lastOrNull()?.let { pageCursors[connectionId] = it }
+                                    ?: pageCursors.remove(connectionId)
+                                pageHasMore[connectionId] = snapshot.size().toLong() == POST_PAGE_SIZE
                             }
-                            database.postDao().loadPosts(uid) to firstCacheError
                         }
-                        trySend(Result.success(posts))
+                        val cacheError = postSyncMutex.withLock {
+                            syncDocuments(connectionId, snapshot.documents)
+                        }
+                        trySend(Result.success(currentPage(uid)))
                         cacheError?.let { trySend(Result.failure(it)) }
                     } catch (error: Throwable) {
                         trySend(Result.failure(error))
@@ -97,6 +102,14 @@ class HomeRepositoryImpl @Inject constructor(
                 if (snapshot == null) return@addSnapshotListener
 
                 val activeIds = snapshot.documents.map(DocumentSnapshot::getId).toSet()
+                synchronized(paginationLock) {
+                    if (paginationUid != uid) resetPagination(uid)
+                    activeConnectionIds.retainAll(activeIds)
+                    activeConnectionIds.addAll(activeIds)
+                    pageCursors.keys.retainAll(activeIds)
+                    pageHasMore.keys.retainAll(activeIds)
+                    connectionsWithOlderPages.retainAll(activeIds)
+                }
                 (postListeners.keys - activeIds).forEach { connectionId ->
                     postListeners.remove(connectionId)?.remove()
                 }
@@ -105,7 +118,7 @@ class HomeRepositoryImpl @Inject constructor(
                 }
                 if (activeIds.isEmpty()) {
                     launch {
-                        runCatching { database.postDao().loadPosts(uid) }
+                        runCatching { currentPage(uid) }
                             .also { trySend(it) }
                     }
                 }
@@ -115,7 +128,53 @@ class HomeRepositoryImpl @Inject constructor(
             connectionListener.remove()
             postListeners.values.forEach(ListenerRegistration::remove)
             postListeners.clear()
+            synchronized(paginationLock) {
+                if (paginationUid == uid) resetPagination(null)
+            }
         }
+    }
+
+    override suspend fun loadOlderPosts(connectionId: String?): Result<PostFeedPage> = runCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
+        val targets = synchronized(paginationLock) {
+            if (paginationUid != uid) resetPagination(uid)
+            activeConnectionIds
+                .filter { connectionId == null || it == connectionId }
+                .mapNotNull { targetConnectionId ->
+                    val cursor = pageCursors[targetConnectionId]
+                    if (pageHasMore[targetConnectionId] == true && cursor != null) {
+                        PageTarget(targetConnectionId, cursor)
+                    } else {
+                        null
+                    }
+                }
+        }
+
+        targets.forEach { target ->
+            check(auth.currentUser?.uid == uid) { "Account changed while loading older posts." }
+            val documents = postsQuery(target.connectionId)
+                .startAfter(target.cursor)
+                .limit(POST_PAGE_SIZE)
+                .get()
+                .awaitTask()
+                .documents
+
+            val cacheError = postSyncMutex.withLock {
+                syncDocuments(target.connectionId, documents)
+            }
+            cacheError?.let { throw it }
+
+            synchronized(paginationLock) {
+                if (paginationUid == uid && target.connectionId in activeConnectionIds) {
+                    connectionsWithOlderPages += target.connectionId
+                    documents.lastOrNull()?.let { pageCursors[target.connectionId] = it }
+                    pageHasMore[target.connectionId] = documents.size.toLong() == POST_PAGE_SIZE
+                }
+            }
+        }
+
+        check(auth.currentUser?.uid == uid) { "Account changed while loading older posts." }
+        currentPage(uid)
     }
 
     override suspend fun loadUsers(userIds: Set<String>): Result<List<User>> = runCatching {
@@ -135,6 +194,46 @@ class HomeRepositoryImpl @Inject constructor(
             database.postDao().upsertMedia(media)
         }
         return media
+    }
+
+    private suspend fun syncDocuments(
+        connectionId: String,
+        documents: List<DocumentSnapshot>
+    ): Throwable? {
+        var firstCacheError: Throwable? = null
+        documents.forEach { document ->
+            val media = storePost(connectionId, document)
+            media.forEach { item ->
+                runCatching { cacheMedia(item) }
+                    .onFailure { if (firstCacheError == null) firstCacheError = it }
+            }
+        }
+        return firstCacheError
+    }
+
+    private fun postsQuery(connectionId: String): Query = firestore.collection("connections")
+        .document(connectionId)
+        .collection("posts")
+        .whereEqualTo("status", PostStatus.ACTIVE.name)
+        .orderBy("createdAt", Query.Direction.DESCENDING)
+
+    private suspend fun currentPage(uid: String): PostFeedPage = PostFeedPage(
+        posts = database.postDao().loadPosts(uid),
+        connectionIdsWithMore = synchronized(paginationLock) {
+            if (paginationUid == uid) {
+                activeConnectionIds.filterTo(mutableSetOf()) { pageHasMore[it] == true }
+            } else {
+                emptySet()
+            }
+        }
+    )
+
+    private fun resetPagination(uid: String?) {
+        paginationUid = uid
+        activeConnectionIds.clear()
+        pageCursors.clear()
+        pageHasMore.clear()
+        connectionsWithOlderPages.clear()
     }
 
     private suspend fun cacheMedia(media: MediaItemEntity) {
@@ -223,7 +322,18 @@ class HomeRepositoryImpl @Inject constructor(
     private companion object {
         const val POST_PAGE_SIZE = 20L
     }
+
+    private data class PageTarget(
+        val connectionId: String,
+        val cursor: DocumentSnapshot
+    )
 }
+
+private suspend fun <T> Task<T>.awaitTask(): T =
+    suspendCancellableCoroutine { continuation ->
+        addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
+        addOnFailureListener { if (continuation.isActive) continuation.resumeWithException(it) }
+    }
 
 private suspend fun FileDownloadTask.awaitDownload(): FileDownloadTask.TaskSnapshot =
     suspendCancellableCoroutine { continuation ->

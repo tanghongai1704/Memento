@@ -118,13 +118,36 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
-                    items(viewModel.getFilteredPosts()) { post ->
+                    items(
+                        items = viewModel.getFilteredPosts(),
+                        key = { post -> "${post.connectionId}:${post.id}" }
+                    ) { post ->
                         PostCard(
                             post = post,
                             authorLabel = viewModel.getPostLabel(post),
                             mediaCacheRevision = uiState.mediaCacheRevision
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    if (uiState.hasMorePosts) {
+                        item(key = "load-more") {
+                            Button(
+                                onClick = viewModel::loadOlderPosts,
+                                enabled = !uiState.isLoadingMore,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp)
+                            ) {
+                                if (uiState.isLoadingMore) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.width(20.dp).height(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Text(if (uiState.isLoadingMore) "Loading..." else "Load older moments")
+                            }
+                        }
                     }
                 }
             }

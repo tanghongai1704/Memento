@@ -36,7 +36,7 @@ Member ID = UID; không dùng collection root `connection_members` (tên bảng 
 
 Media map: `mediaId`, `mediaType: IMAGE | VIDEO`, `storagePath`, `thumbnailPath: String?`, `mimeType`, `width`, `height`, `durationMs: Number?`, `sizeBytes`, `position` (0-based). Media metadata phản ánh file sau nén; video cần thumbnail. LocalMediaItem chỉ là picker model, không serialize vào Firestore.
 
-Pagination dự kiến theo từng connection: status ACTIVE, createdAt DESC, limit 20, startAfter(lastDocument). Index queryScope COLLECTION cho query posts dưới một connection; không nhầm với COLLECTION_GROUP query toàn bộ posts. Trang 20 không giới hạn tổng lịch sử.
+Pagination đã triển khai theo từng connection: status ACTIVE, createdAt DESC, limit 20, startAfter(lastDocument). Mỗi connection giữ cursor và trạng thái còn trang riêng; listener realtime chỉ giữ 20 bài mới nhất nhưng các trang cũ đã upsert vào Room vẫn được giữ để tạo feed chung. Index queryScope COLLECTION dùng cho query posts dưới một connection; không nhầm với COLLECTION_GROUP query toàn bộ posts. Trang 20 không giới hạn tổng lịch sử.
 
 Tạo postId/mediaId trước upload; giữ nguyên khi retry. Luồng đã triển khai: Room PENDING → xử lý JPEG → Storage → Callable `finalizePhotoPost` → Firestore transaction set Post + update connection.lastPostAt/updatedAt bằng cùng server timestamp → Room SYNCED. Backend đọc object thật, kiểm tra `contentType`, byte size và custom metadata `authorId`; post đã tồn tại chỉ được coi là retry thành công khi dữ liệu bất biến khớp, nên không reset createdAt. Firestore không atomic với Storage: retry dùng lại object, còn orphan cleanup thuộc bước 7. Soft delete metadata trước cleanup Storage.
 

@@ -12,8 +12,16 @@ data class HomeUiState(
     val selectedFilter: FeedFilter = FeedFilter.All,
     val mediaCacheRevision: Long = 0,
     val isLoading: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val connectionIdsWithMore: Set<String> = emptySet(),
     val errorMessage: String? = null
 ) {
+    val hasMorePosts: Boolean
+        get() = when (val filter = selectedFilter) {
+            FeedFilter.All -> connectionIdsWithMore.isNotEmpty()
+            is FeedFilter.Connection -> filter.connectionId in connectionIdsWithMore
+        }
+
     fun labelFor(connection: Connection): String = connectionLabels[connection.id]
         ?: connection.name?.takeIf { it.isNotBlank() }
         ?: "Direct connection"

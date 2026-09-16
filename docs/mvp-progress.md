@@ -184,3 +184,11 @@ Mở quyền đọc Post đúng membership, đồng bộ từng connection theo 
 - Media picker tiếp tục dùng Android Photo Picker (`PickVisualMedia`): hệ thống chỉ cấp URI người dùng chọn nên không xin quyền đọc toàn bộ thư viện. Manifest yêu cầu module Photo Picker backport từ Google Play services cho thiết bị hỗ trợ.
 - Android debug build, 5 unit tests Functions, 9 Storage Rules checks và Firestore Rules emulator đều đạt. Firestore Rules mới đã deploy lên `memento-fre`; APK được cài giữ dữ liệu trên hai emulator và xác nhận U2 nhận metadata, tải file cache rồi render ảnh U1 đã đăng, không còn `PERMISSION_DENIED`.
 - Tiêu đề mỗi Post card lấy profile theo `post.authorId`; chip filter vẫn dùng tên người còn lại của connection. Nhờ vậy Alice thấy bài mình đăng mang tên Alice, còn Andy cũng thấy đúng Alice là tác giả.
+
+## 17/09/2026 — hoàn thiện phân trang bước 5
+
+- Mỗi connection ACTIVE có cursor Firestore riêng. Listener tiếp tục nghe 20 bài mới nhất; nút `Load older moments` dùng `startAfter(lastDocument)` để lấy tiếp tối đa 20 bài cho từng connection còn dữ liệu.
+- Trang cũ được upsert vào Room bằng composite key hiện có nên snapshot lặp hoặc retry không tạo bài trùng. Khi bài mới đẩy ranh giới trang đầu xuống, cursor chưa phân trang được cập nhật; sau khi đã tải trang cũ, listener không ghi đè cursor đó.
+- Trạng thái `hasMore` và `isLoadingMore` được đưa lên Home UI. Nút tải thêm tự ẩn khi mọi connection đã hết trang; lỗi giữ nguyên feed hiện tại để người dùng retry.
+- Key Compose của Post card gồm cả `connectionId:postId`, đúng với khóa dữ liệu và tránh va chạm nếu hai connection tình cờ có cùng postId.
+- Android debug build, 5 unit tests Functions và Firestore Rules emulator đều đạt sau thay đổi.

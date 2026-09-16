@@ -46,13 +46,14 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch {
             homeRepository.observePosts().collect { result ->
-                result.onSuccess { posts ->
-                    val authorLabels = loadAuthorLabels(posts)
+                result.onSuccess { page ->
+                    val authorLabels = loadAuthorLabels(page.posts)
                     _uiState.value = _uiState.value.copy(
-                        posts = posts,
+                        posts = page.posts,
                         authorLabels = authorLabels,
                         mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         isLoading = false,
+                        connectionIdsWithMore = page.connectionIdsWithMore,
                         errorMessage = null
                     )
                 }.onFailure { error ->
@@ -89,6 +90,31 @@ class HomeViewModel @Inject constructor(
 
     fun onFilterSelected(filter: FeedFilter) {
         _uiState.value = _uiState.value.copy(selectedFilter = filter)
+    }
+
+    fun loadOlderPosts() {
+        if (_uiState.value.isLoadingMore || !_uiState.value.hasMorePosts) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMore = true, errorMessage = null)
+            val connectionId = (_uiState.value.selectedFilter as? FeedFilter.Connection)?.connectionId
+            homeRepository.loadOlderPosts(connectionId)
+                .onSuccess { page ->
+                    _uiState.value = _uiState.value.copy(
+                        posts = page.posts,
+                        authorLabels = loadAuthorLabels(page.posts),
+                        mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
+                        isLoadingMore = false,
+                        connectionIdsWithMore = page.connectionIdsWithMore,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMore = false,
+                        errorMessage = error.message ?: "Could not load older photos."
+                    )
+                }
+        }
     }
 
     fun getFilteredPosts(): List<Post> {

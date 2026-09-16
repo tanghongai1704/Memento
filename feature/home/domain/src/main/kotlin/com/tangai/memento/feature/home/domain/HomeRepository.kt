@@ -5,9 +5,15 @@ import com.tangai.memento.domain.model.Connection
 import com.tangai.memento.domain.model.User
 import kotlinx.coroutines.flow.Flow
 
+data class PostFeedPage(
+    val posts: List<Post>,
+    val connectionIdsWithMore: Set<String>
+)
+
 interface HomeRepository {
     suspend fun loadPosts(): Result<List<Post>>
-    fun observePosts(): Flow<Result<List<Post>>>
+    fun observePosts(): Flow<Result<PostFeedPage>>
+    suspend fun loadOlderPosts(connectionId: String? = null): Result<PostFeedPage>
     suspend fun loadUsers(userIds: Set<String>): Result<List<User>>
     suspend fun loadConnections(): Result<List<Connection>>
     suspend fun loadConnectedUsers(): Result<List<User>>
