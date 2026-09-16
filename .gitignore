@@ -17,6 +17,7 @@ local.properties
 .idea/assetWizardSettings.xml
 
 # Kotlin/IDE temporary files
+.kotlin/
 *.salive
 
 # macOS

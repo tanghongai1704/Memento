@@ -52,6 +52,6 @@ Với dữ liệu legacy còn gặp ở môi trường khác, export/backup trư
 
 ## Rules và triển khai
 
-`firestore.rules` cho phép profile owner writes và connection/member reads đúng quyền. Mã kết nối, lookup, lock, connection/member mutation và Post vẫn khóa client write; Admin SDK trong Functions thực hiện redeem và finalize post. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình. `firebase.json` quản lý Rules/index/Functions và Emulator, gồm Storage Emulator. Hai indexes đang READY. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
+`firestore.rules` cho phép profile owner writes và connection/member/Post reads đúng membership ACTIVE. Mã kết nối, lookup, lock, connection/member mutation và Post write vẫn khóa client; Admin SDK trong Functions thực hiện redeem và finalize post. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình. `firebase.json` quản lý Rules/index/Functions và Emulator, gồm Storage Emulator. Hai indexes đang READY. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
 
 Rules không lọc dữ liệu sau query; điều kiện query phải phù hợp quyền đọc. Tham khảo [Firebase query rules](https://firebase.google.com/docs/firestore/security/rules-query) và [transaction](https://firebase.google.com/docs/firestore/manage-data/transactions).

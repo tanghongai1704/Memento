@@ -25,6 +25,8 @@ class HomeViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             loadHomeData()
+        }
+        viewModelScope.launch {
             homeRepository.observeConnectedUsers().collect { result ->
                 result.onSuccess { users ->
                     val connections = homeRepository.loadConnections()
@@ -42,6 +44,25 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            homeRepository.observePosts().collect { result ->
+                result.onSuccess { posts ->
+                    val authorLabels = loadAuthorLabels(posts)
+                    _uiState.value = _uiState.value.copy(
+                        posts = posts,
+                        authorLabels = authorLabels,
+                        mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
+                        isLoading = false,
+                        errorMessage = null
+                    )
+                }.onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Could not sync shared photos."
+                    )
+                }
+            }
+        }
     }
 
     private suspend fun loadHomeData() {
@@ -51,12 +72,14 @@ class HomeViewModel @Inject constructor(
         val postsResult = homeRepository.loadPosts()
         val connectedUsersResult = homeRepository.loadConnectedUsers()
         val connections = connectionsResult.getOrElse { emptyList() }
+        val posts = postsResult.getOrElse { emptyList() }
         val connectedUsersById = connectedUsersResult.getOrElse { emptyList() }.associateBy { it.id }
 
         _uiState.value = _uiState.value.copy(
-            posts = postsResult.getOrElse { emptyList() },
+            posts = posts,
             connections = connections,
             connectionLabels = connections.associate { it.id to it.displayLabel(connectedUsersById) },
+            authorLabels = loadAuthorLabels(posts),
             isLoading = false,
             errorMessage = postsResult.exceptionOrNull()?.message
                 ?: connectionsResult.exceptionOrNull()?.message
@@ -73,6 +96,10 @@ class HomeViewModel @Inject constructor(
     }
 
     fun getPostLabel(post: Post): String =
-        _uiState.value.connections.find { it.id == post.connectionId }
-            ?.let(_uiState.value::labelFor) ?: "Direct connection"
+        _uiState.value.authorLabels[post.authorId] ?: "Unknown author"
+
+    private suspend fun loadAuthorLabels(posts: List<Post>): Map<String, String> =
+        homeRepository.loadUsers(posts.mapTo(mutableSetOf(), Post::authorId))
+            .getOrDefault(emptyList())
+            .associate { user -> user.id to "${user.displayName} (@${user.username})" }
 }

@@ -85,6 +85,15 @@ fun HomeScreen(
                 }
             }
 
+            uiState.errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                )
+            }
+
             if (uiState.isLoading) {
                 Box(
                     modifier = Modifier
@@ -112,7 +121,8 @@ fun HomeScreen(
                     items(viewModel.getFilteredPosts()) { post ->
                         PostCard(
                             post = post,
-                            postLabel = viewModel.getPostLabel(post)
+                            authorLabel = viewModel.getPostLabel(post),
+                            mediaCacheRevision = uiState.mediaCacheRevision
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -151,18 +161,25 @@ fun FilterChip(
 @Composable
 fun PostCard(
     post: Post,
-    postLabel: String
+    authorLabel: String,
+    mediaCacheRevision: Long
 ) {
     val context = LocalContext.current
     val media = post.mediaItems.firstOrNull()
-    val localBitmap: Bitmap? = remember(post.id, post.connectionId, media?.mediaId) {
-        media?.let {
-            val file = File(
-                context.filesDir,
-                "pending_media/${post.connectionId}/${post.id}/${it.mediaId}.jpg",
-            )
-            if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
-        }
+    val localFile = media?.let {
+        File(
+            context.filesDir,
+            "pending_media/${post.connectionId}/${post.id}/${it.mediaId}.jpg",
+        )
+    }
+    val localBitmap: Bitmap? = remember(
+        post.id,
+        post.connectionId,
+        media?.mediaId,
+        mediaCacheRevision,
+        localFile?.lastModified()
+    ) {
+        localFile?.takeIf(File::exists)?.let { BitmapFactory.decodeFile(it.absolutePath) }
     }
     Card(
         modifier = Modifier
@@ -173,7 +190,7 @@ fun PostCard(
             modifier = Modifier.padding(16.dp)
         ) {
             Text(
-                text = postLabel,
+                text = authorLabel,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -186,7 +203,7 @@ fun PostCard(
                     modifier = Modifier.fillMaxWidth().height(280.dp)
                 )
             } else {
-                Text("Photo saved. Remote download arrives in step 5.")
+                Text("Photo is not available in the local cache yet.")
             }
             post.caption?.let {
                 Spacer(modifier = Modifier.height(8.dp))

@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 
 interface HomeRepository {
     suspend fun loadPosts(): Result<List<Post>>
+    fun observePosts(): Flow<Result<List<Post>>>
+    suspend fun loadUsers(userIds: Set<String>): Result<List<User>>
     suspend fun loadConnections(): Result<List<Connection>>
     suspend fun loadConnectedUsers(): Result<List<User>>
     fun observeConnectedUsers(): Flow<Result<List<User>>>

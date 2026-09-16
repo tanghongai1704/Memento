@@ -174,3 +174,13 @@ Mở quyền đọc Post đúng membership, đồng bộ từng connection theo 
 - Android debug build đạt; bản mới đã cài trên hai emulator. Kiểm tra thật: U1 thấy `u2 (@u2)` và U2 thấy `u1 (@u1)` trong Share with.
 - Home trước đó vẫn hiện `Direct connection` vì khi đọc `ConnectionEntity` từ Room, repository chuyển sang domain với danh sách members rỗng. Đã sửa mapping để nạp đầy đủ member của từng connection và dùng chung hàm tạo nhãn connection.
 - Kiểm tra bản cuối: chip cạnh `All` và nhãn trên Post của U1 đều là `u2 (@u2)`; chip Home của U2 là `u1 (@u1)`.
+
+## 16/09/2026 — bắt đầu bước 5: listener bài ảnh
+
+- Home nghe danh sách connection ACTIVE của tài khoản hiện tại rồi mở một Post listener riêng cho từng connection, query `status == ACTIVE`, `createdAt DESC`, giới hạn 20 bài mới nhất.
+- Snapshot được map và upsert vào Room với trạng thái `SYNCED`; media ảnh được tải từ Storage vào cache ổn định `pending_media/{connectionId}/{postId}/{mediaId}.jpg`. File tải tạm được kiểm tra đúng byte size trước khi đổi tên vào cache.
+- Home cập nhật từ Room sau mỗi snapshot, tăng cache revision sau khi download để Compose nạp ảnh vừa xuất hiện, hiển thị ảnh remote bằng cùng đường cache với ảnh sender và giữ danh sách hiện tại nếu listener/tải ảnh lỗi. Listener được gỡ khi connection rời danh sách hoặc ViewModel bị hủy.
+- Firestore Rules đã mở read Post cho member ACTIVE nhưng vẫn khóa toàn bộ client write. Rule emulator kiểm tra member đọc/query được, outsider bị chặn và member không thể tự ghi Post.
+- Media picker tiếp tục dùng Android Photo Picker (`PickVisualMedia`): hệ thống chỉ cấp URI người dùng chọn nên không xin quyền đọc toàn bộ thư viện. Manifest yêu cầu module Photo Picker backport từ Google Play services cho thiết bị hỗ trợ.
+- Android debug build, 5 unit tests Functions, 9 Storage Rules checks và Firestore Rules emulator đều đạt. Firestore Rules mới đã deploy lên `memento-fre`; APK được cài giữ dữ liệu trên hai emulator và xác nhận U2 nhận metadata, tải file cache rồi render ảnh U1 đã đăng, không còn `PERMISSION_DENIED`.
+- Tiêu đề mỗi Post card lấy profile theo `post.authorId`; chip filter vẫn dùng tên người còn lại của connection. Nhờ vậy Alice thấy bài mình đăng mang tên Alice, còn Andy cũng thấy đúng Alice là tác giả.

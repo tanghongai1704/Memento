@@ -74,16 +74,28 @@ call(':commit', 'a', {'writes': [{'update': {'name': name + '/connections/c', 'f
 call(':commit', 'ADMIN', {'writes': [
     {'update': {'name': name + '/connections/c', 'fields': {'status': {'stringValue': 'ACTIVE'},
         'memberIds': {'arrayValue': {'values': [{'stringValue': 'a'}]}}, 'lastPostAt': {'nullValue': None}}}},
-    {'update': {'name': name + '/connections/c/members/a', 'fields': {'status': {'stringValue': 'ACTIVE'}}}}
+    {'update': {'name': name + '/connections/c/members/a', 'fields': {'status': {'stringValue': 'ACTIVE'}}}},
+    {'update': {'name': name + '/connections/c/posts/p', 'fields': {
+        'status': {'stringValue': 'ACTIVE'}, 'authorId': {'stringValue': 'a'},
+        'createdAt': {'timestampValue': '2026-09-16T00:00:00Z'}}}}
 ]})
 call('/connections/c', 'a')
 call('/connections/c/members/a', 'a')
+call('/connections/c/posts/p', 'a')
 call('/connections/c', 'b', expected=403)
 call('/connections/c/members/a', 'b', expected=403)
+call('/connections/c/posts/p', 'b', expected=403)
+call(':commit', 'a', {'writes': [{'update': {'name': name + '/connections/c/posts/forged',
+    'fields': {'status': {'stringValue': 'ACTIVE'}}}}]}, expected=403)
+call('/connections/c:runQuery', 'a', {'structuredQuery': {
+    'from': [{'collectionId': 'posts'}], 'limit': 20,
+    'where': {'fieldFilter': {'field': {'fieldPath': 'status'}, 'op': 'EQUAL',
+        'value': {'stringValue': 'ACTIVE'}}},
+    'orderBy': [{'field': {'fieldPath': 'createdAt'}, 'direction': 'DESCENDING'}]}})
 call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'connections'}]}}, expected=403)
 call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'connections'}],
     'where': {'compositeFilter': {'op': 'AND', 'filters': [
         {'fieldFilter': {'field': {'fieldPath': 'memberIds'}, 'op': 'ARRAY_CONTAINS', 'value': {'stringValue': 'a'}}},
         {'fieldFilter': {'field': {'fieldPath': 'status'}, 'op': 'EQUAL', 'value': {'stringValue': 'ACTIVE'}}}]}},
     'orderBy': [{'field': {'fieldPath': 'lastPostAt'}, 'direction': 'DESCENDING'}]}})
-print('Firestore rules: 22 access/validation checks passed (local demo emulator).')
+print('Firestore rules: profile, connection and post access/validation checks passed (local demo emulator).')

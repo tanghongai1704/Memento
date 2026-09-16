@@ -1,5 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.hilt.plugin)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -21,12 +23,17 @@ dependencies {
     implementation(project(":feature:connection:domain"))
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
     implementation(project(":core:domain"))
     implementation(project(":core:database"))
     implementation(project(":core:network"))
     implementation(project(":feature:home:domain"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
     implementation(libs.javax.inject)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

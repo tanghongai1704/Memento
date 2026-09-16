@@ -8,7 +8,9 @@ data class HomeUiState(
     val posts: List<Post> = emptyList(),
     val connections: List<Connection> = emptyList(),
     val connectionLabels: Map<String, String> = emptyMap(),
+    val authorLabels: Map<String, String> = emptyMap(),
     val selectedFilter: FeedFilter = FeedFilter.All,
+    val mediaCacheRevision: Long = 0,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 ) {
