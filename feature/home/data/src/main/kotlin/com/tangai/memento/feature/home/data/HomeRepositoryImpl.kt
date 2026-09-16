@@ -29,6 +29,7 @@ class HomeRepositoryImpl @Inject constructor(private val database: MementoDataba
         }.sortedByDescending { it.lastPostAt }.also { check(auth.currentUser?.uid == uid) }
     }
     override suspend fun loadConnectedUsers(): Result<List<User>> = connections.loadConnections()
+    override fun observeConnectedUsers() = connections.observeConnections()
 
     override fun getFilteredPosts(posts: List<Post>, filter: FeedFilter): List<Post> =
         posts.filter { filter is FeedFilter.All || (filter is FeedFilter.Connection && it.connectionId == filter.connectionId) }

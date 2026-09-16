@@ -69,6 +69,17 @@ class ConnectionFirestoreDataSource @Inject constructor(
         awaitClose { registration.remove() }
     }
 
+    fun observeUser(uid: String): Flow<User?> = callbackFlow {
+        val registration = firestore.collection("users").document(uid)
+            .addSnapshotListener { snapshot, error ->
+                when {
+                    error != null -> close(error)
+                    snapshot != null -> trySend(snapshot.toProfile())
+                }
+            }
+        awaitClose { registration.remove() }
+    }
+
     suspend fun getUser(uid: String): User? =
         firestore.collection("users").document(uid).get().awaitTask().toProfile()
 

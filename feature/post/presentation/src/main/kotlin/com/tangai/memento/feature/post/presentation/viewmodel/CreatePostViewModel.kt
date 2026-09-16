@@ -46,6 +46,19 @@ class CreatePostViewModel @Inject constructor(
                 errorMessage = result.exceptionOrNull()?.message
             )
         }
+        viewModelScope.launch {
+            connectionRepository.observeConnections().collect { result ->
+                result.onSuccess { users ->
+                    val usersById = users.associateBy { it.id }
+                    val current = _uiState.value
+                    _uiState.value = current.copy(
+                        recipientLabels = current.recipients.associate { connection ->
+                            connection.id to connection.displayLabel(usersById)
+                        }
+                    )
+                }
+            }
+        }
     }
 
     val uiState: StateFlow<CreatePostUiState> = _uiState.asStateFlow()

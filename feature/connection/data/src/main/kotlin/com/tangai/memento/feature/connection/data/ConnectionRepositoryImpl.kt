@@ -8,8 +8,12 @@ import com.tangai.memento.database.model.toEntity
 import com.tangai.memento.domain.model.*
 import com.tangai.memento.feature.connection.data.source.ConnectionFirestoreDataSource
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
@@ -56,9 +60,23 @@ class ConnectionRepositoryImpl @Inject constructor(
             }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeConnections(): Flow<Result<List<User>>> =
         source.observeCurrentUserConnectionChanges()
-            .map { loadConnections() }
+            .map {
+                loadConnections().getOrThrow().map(User::id).distinct()
+            }
+            .flatMapLatest { userIds ->
+                if (userIds.isEmpty()) {
+                    flowOf(Result.success(emptyList()))
+                } else {
+                    combine(userIds.map(source::observeUser)) { profiles ->
+                        val users = profiles.filterNotNull()
+                        users.forEach { database.userDao().upsertUser(it.toEntity()) }
+                        Result.success(users)
+                    }
+                }
+            }
             .catch { emit(Result.failure(it)) }
 
     override suspend fun searchUsers(query: String): Result<List<User>> = runCatching {
