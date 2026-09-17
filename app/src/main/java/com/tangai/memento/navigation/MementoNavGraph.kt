@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,11 +20,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,81 +77,111 @@ fun MementoNavGraph() {
             contentWindowInsets = WindowInsets.safeDrawing,
             bottomBar = {
                 if (showBottomBar) {
-                    Row(
+                    Surface(
+                        shape = RoundedCornerShape(30.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        tonalElevation = 2.dp,
+                        shadowElevation = 10.dp,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp, vertical = 16.dp)
-                            .shadow(elevation = 10.dp, shape = RoundedCornerShape(28.dp), clip = false)
-                            .clip(RoundedCornerShape(28.dp))
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = {
-                            navController.navigate(MementoRoute.Home.route) {
-                                popUpTo(MementoRoute.Home.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Filled.Home,
-                                contentDescription = "Home",
-                                tint = if (currentRoute == MementoRoute.Home.route) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        IconButton(onClick = {
-                            navController.navigate(MementoRoute.Connection.route) {
-                                popUpTo(MementoRoute.Home.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Filled.People,
-                                contentDescription = "Connections",
-                                tint = if (currentRoute == MementoRoute.Connection.route) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        FloatingActionButton(
-                            onClick = {
-                                navController.navigate(MementoRoute.CreatePost.route)
-                            },
-                            shape = CircleShape,
-                            containerColor = MaterialTheme.colorScheme.primary
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = "Create Post",
-                                tint = Color.White
-                            )
-                        }
-                        IconButton(onClick = {
-                            navController.navigate(MementoRoute.History.route) {
-                                popUpTo(MementoRoute.Home.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                            FilledIconButton(
+                                onClick = {
+                                    navController.navigate(MementoRoute.Home.route) {
+                                        popUpTo(MementoRoute.Home.route) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                modifier = Modifier.size(46.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = if (currentRoute == MementoRoute.Home.route) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (currentRoute == MementoRoute.Home.route) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Home,
+                                    contentDescription = "Home"
+                                )
                             }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Filled.History,
-                                contentDescription = "History",
-                                tint = if (currentRoute == MementoRoute.History.route) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        IconButton(onClick = {
-                            navController.navigate(MementoRoute.Profile.route) {
-                                popUpTo(MementoRoute.Home.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                            FilledIconButton(
+                                onClick = {
+                                    navController.navigate(MementoRoute.Connection.route) {
+                                        popUpTo(MementoRoute.Home.route) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                modifier = Modifier.size(46.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = if (currentRoute == MementoRoute.Connection.route) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (currentRoute == MementoRoute.Connection.route) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.People,
+                                    contentDescription = "Connections"
+                                )
                             }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Filled.Person,
-                                contentDescription = "Profile",
-                                tint = if (currentRoute == MementoRoute.Profile.route) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                            )
+                            FloatingActionButton(
+                                onClick = {
+                                    navController.navigate(MementoRoute.CreatePost.route)
+                                },
+                                shape = CircleShape,
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = "Create Post",
+                                    tint = Color.White
+                                )
+                            }
+                            FilledIconButton(
+                                onClick = {
+                                    navController.navigate(MementoRoute.History.route) {
+                                        popUpTo(MementoRoute.Home.route) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                modifier = Modifier.size(46.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = if (currentRoute == MementoRoute.History.route) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (currentRoute == MementoRoute.History.route) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.History,
+                                    contentDescription = "History"
+                                )
+                            }
+                            FilledIconButton(
+                                onClick = {
+                                    navController.navigate(MementoRoute.Profile.route) {
+                                        popUpTo(MementoRoute.Home.route) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                modifier = Modifier.size(46.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = if (currentRoute == MementoRoute.Profile.route) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (currentRoute == MementoRoute.Profile.route) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Person,
+                                    contentDescription = "Profile"
+                                )
+                            }
                         }
                     }
                 }

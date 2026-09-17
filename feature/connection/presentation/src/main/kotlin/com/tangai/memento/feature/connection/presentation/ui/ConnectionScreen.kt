@@ -1,11 +1,17 @@
 package com.tangai.memento.feature.connection.presentation.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -30,64 +36,177 @@ fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
             }
         )
     }
+
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text(
-                text = "Connections",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-            ) }
-        item { Text("Connect with a code", style = MaterialTheme.typography.titleLarge) }
-        item { Text("Enter the permanent invite code shown on the other person's profile.") }
-        item {
-            OutlinedTextField(
-                value = state.redeemCode,
-                onValueChange = viewModel::onRedeemCodeChanged,
-                label = { Text("Invite code") },
-                placeholder = { Text("XXXX-XXXX") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Connections",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                Text(
+                    text = "Private access with a direct invite code",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
+
         item {
-            Button(
-                onClick = viewModel::redeemInvite,
-                enabled = !state.isRedeemRunning && state.redeemCode.replace("-", "").length == 8
-            ) { Text(if (state.isRedeemRunning) "Connecting…" else "Connect") }
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Connect with a code", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        "Enter the permanent invite code shown on the other person’s profile.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = state.redeemCode,
+                        onValueChange = viewModel::onRedeemCodeChanged,
+                        label = { Text("Invite code") },
+                        placeholder = { Text("XXXX-XXXX") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium
+                    )
+                    Button(
+                        onClick = viewModel::redeemInvite,
+                        enabled = !state.isRedeemRunning && state.redeemCode.replace("-", "").length == 8,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (state.isRedeemRunning) "Connecting…" else "Connect")
+                    }
+                }
+            }
         }
 
         if (state.isLoading || state.isRedeemRunning) {
             item { LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
         }
         state.errorMessage?.let { message ->
-            item { Text(message, color = MaterialTheme.colorScheme.error) }
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+            }
         }
         state.successMessage?.let { message ->
-            item { Text(message, color = MaterialTheme.colorScheme.primary) }
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+            }
         }
 
-        item { HorizontalDivider() }
-        item { Text("Connected users", style = MaterialTheme.typography.titleLarge) }
-        if (!state.isLoading && state.connectedUsers.isEmpty()) item { Text("No connections yet") }
-        items(state.connectedUsers, key = { "connected-" + it.id }) { user ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        item {
+            Text(
+                text = "Connected users",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
+        if (!state.isLoading && state.connectedUsers.isEmpty()) {
+            item {
                 Text(
-                    "${user.displayName} (@${user.username})",
-                    modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    text = "No connections yet",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
                 )
-                TextButton(
-                    onClick = { viewModel.requestDisconnect(user.id) },
-                    enabled = state.connectionIdsByUserId[user.id] != null &&
-                        state.disconnectingUserId != user.id
+            }
+        }
+
+        items(state.connectedUsers, key = { "connected-" + it.id }) { user ->
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(if (state.disconnectingUserId == user.id) "Disconnecting…" else "Disconnect")
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = user.displayName.firstOrNull()?.uppercase() ?: "?",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = user.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "@${user.username}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    TextButton(
+                        onClick = { viewModel.requestDisconnect(user.id) },
+                        enabled = state.connectionIdsByUserId[user.id] != null &&
+                            state.disconnectingUserId != user.id
+                    ) {
+                        Text(if (state.disconnectingUserId == user.id) "Disconnecting…" else "Disconnect")
+                    }
                 }
             }
         }

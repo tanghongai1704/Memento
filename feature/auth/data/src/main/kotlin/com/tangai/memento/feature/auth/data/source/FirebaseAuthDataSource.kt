@@ -102,14 +102,14 @@ class FirebaseAuthDataSource @Inject constructor(
     private fun FirebaseAuthException.toAuthDataError(): AuthDataError {
         return when (errorCode) {
             "ERROR_INVALID_EMAIL" -> AuthDataError.InvalidEmail
-            "ERROR_USER_NOT_FOUND" -> AuthDataError.Unknown("No Firebase account found for this email.")
-            "ERROR_WRONG_PASSWORD" -> AuthDataError.Unknown("Incorrect password.")
-            "ERROR_INVALID_CREDENTIAL" -> AuthDataError.Unknown("Incorrect email or password.")
-            "ERROR_INVALID_LOGIN_CREDENTIALS" -> AuthDataError.Unknown("Incorrect email or password.")
+            "ERROR_USER_NOT_FOUND" -> AuthDataError.InvalidCredentials
+            "ERROR_WRONG_PASSWORD" -> AuthDataError.InvalidCredentials
+            "ERROR_INVALID_CREDENTIAL" -> AuthDataError.InvalidCredentials
+            "ERROR_INVALID_LOGIN_CREDENTIALS" -> AuthDataError.InvalidCredentials
             "ERROR_USER_DISABLED" -> AuthDataError.Unknown("This Firebase account has been disabled.")
             "ERROR_OPERATION_NOT_ALLOWED" -> AuthDataError.Unknown("Email/password sign-in is not enabled in Firebase Authentication.")
             "ERROR_TOO_MANY_REQUESTS" -> AuthDataError.Unknown("Too many attempts. Please try again later.")
-            else -> AuthDataError.Unknown("$errorCode: ${message.orEmpty()}".trim())
+            else -> AuthDataError.Unknown("Login failed. Please try again.")
         }
     }
 
