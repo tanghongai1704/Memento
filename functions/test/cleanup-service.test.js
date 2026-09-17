@@ -1,8 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {Timestamp} = require("firebase-admin/firestore");
 const {MEDIA_CLEANUP_GRACE_MS} = require("../lib/cleanupCore");
 const {cleanupExpiredMedia} = require("../lib/cleanupService");
+
+const timestamp = (millis) => ({toMillis: () => millis});
 
 test("cleanup deletes only expired orphan and matching deleted media", async () => {
   const now = Date.UTC(2026, 8, 17);
@@ -28,11 +29,11 @@ test("cleanup deletes only expired orphan and matching deleted media", async () 
   ];
   const posts = {
     orphan: {exists: false},
-    deleted: {exists: true, status: "DELETED", deletedAt: Timestamp.fromMillis(now - MEDIA_CLEANUP_GRACE_MS),
+    deleted: {exists: true, status: "DELETED", deletedAt: timestamp(now - MEDIA_CLEANUP_GRACE_MS),
       mediaItems: [{storagePath: paths.deleted}]},
     active: {exists: true, status: "ACTIVE", mediaItems: [{storagePath: paths.active}]},
     recent: {exists: false},
-    mismatch: {exists: true, status: "DELETED", deletedAt: Timestamp.fromMillis(now - MEDIA_CLEANUP_GRACE_MS),
+    mismatch: {exists: true, status: "DELETED", deletedAt: timestamp(now - MEDIA_CLEANUP_GRACE_MS),
       mediaItems: [{storagePath: "connections/c/posts/mismatch/other.jpg"}]},
   };
   const db = {collection: () => ({doc: () => ({collection: () => ({doc: (postId) => ({

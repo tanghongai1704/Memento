@@ -1,11 +1,11 @@
 package com.tangai.memento.feature.post.presentation.ui
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -41,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.domain.model.MediaType
 import com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel
+import java.util.Locale
+import coil3.compose.AsyncImage
 
 @Composable
 fun MediaPreviewScreen(
@@ -49,15 +50,8 @@ fun MediaPreviewScreen(
     viewModel: CreatePostViewModel
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     var confirmDiscard by remember { mutableStateOf(false) }
     val previewMedia = uiState.selectedMedia.firstOrNull()
-    val previewBitmap = remember(previewMedia?.uri, previewMedia?.thumbnailUri) {
-        if (previewMedia == null) null else loadBitmapFromUri(
-            context,
-            previewMedia.thumbnailUri ?: previewMedia.uri
-        )
-    }
 
     if (confirmDiscard) {
         AlertDialog(
@@ -86,6 +80,8 @@ fun MediaPreviewScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(16.dp)
         ) {
             Text(
@@ -110,16 +106,16 @@ fun MediaPreviewScreen(
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (previewBitmap != null) {
-                        Image(
-                            bitmap = previewBitmap.asImageBitmap(),
+                    if (previewMedia != null) {
+                        AsyncImage(
+                            model = previewMedia.thumbnailUri ?: previewMedia.uri,
                             contentDescription = previewMedia?.displayName ?: "Media preview",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
                         Text(
-                            text = if (previewMedia == null) "No media selected" else "Preview unavailable",
+                            text = "No media selected",
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(16.dp)
                         )
@@ -133,6 +129,26 @@ fun MediaPreviewScreen(
                     fontSize = 16.sp,
                     modifier = Modifier.padding(top = 8.dp)
                 )
+                val originalSize = previewMedia.originalSizeBytes
+                val processedSize = previewMedia.processedSizeBytes
+                if (processedSize > 0L) {
+                    Text(
+                        text = if (originalSize > 0L) {
+                            "${formatBytes(originalSize)} → ${formatBytes(processedSize)} " +
+                                "(${((1f - previewMedia.compressionRatio).coerceIn(0f, 1f) * 100).toInt()}% smaller)"
+                        } else {
+                            "Compressed size: ${formatBytes(processedSize)}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (originalSize > 0L) {
+                    Text(
+                        text = "Original size: ${formatBytes(originalSize)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -215,14 +231,8 @@ fun MediaPreviewScreen(
     }
 }
 
-private fun loadBitmapFromUri(context: Context, uriString: String?): Bitmap? {
-    if (uriString.isNullOrBlank()) return null
-    return try {
-        val uri = Uri.parse(uriString)
-        context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            BitmapFactory.decodeStream(inputStream)
-        }
-    } catch (_: Exception) {
-        null
-    }
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", bytes / (1024f * 1024f))
+    bytes >= 1024L -> String.format(Locale.US, "%.0f KB", bytes / 1024f)
+    else -> "$bytes B"
 }

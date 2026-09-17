@@ -1,8 +1,16 @@
-import {Firestore, Timestamp} from "firebase-admin/firestore";
+import type {Firestore} from "firebase-admin/firestore";
 import {Bucket} from "@google-cloud/storage";
 import {parseStoredMediaPath, shouldDeleteStoredMedia} from "./cleanupCore";
 
 export type CleanupResult = {scanned: number; deleted: number; skipped: number};
+
+function timestampMillis(value: unknown): number | undefined {
+  if (typeof value !== "object" || value === null || !("toMillis" in value)) return undefined;
+  const toMillis = (value as {toMillis?: unknown}).toMillis;
+  if (typeof toMillis !== "function") return undefined;
+  const millis = toMillis.call(value);
+  return typeof millis === "number" && Number.isFinite(millis) ? millis : undefined;
+}
 
 export async function cleanupExpiredMedia(
   db: Firestore,
@@ -30,7 +38,7 @@ export async function cleanupExpiredMedia(
       nowMillis,
       postExists: post.exists,
       postStatus: post.exists ? post.get("status") : undefined,
-      deletedAtMillis: deletedAt instanceof Timestamp ? deletedAt.toMillis() : undefined,
+      deletedAtMillis: timestampMillis(deletedAt),
       postStoragePaths: mediaItems.map((media: unknown) =>
         typeof media === "object" && media !== null && "storagePath" in media ?
           (media as {storagePath?: unknown}).storagePath : undefined,

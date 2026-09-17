@@ -39,7 +39,14 @@ class CreatePostViewModel @Inject constructor(
                 },
                 selectedRecipient = pending?.post?.connectionId?.let { id -> recipients.find { it.id == id } },
                 selectedMedia = pending?.let {
-                    listOf(LocalMediaItem(uri = it.localUri, type = MediaType.IMAGE, displayName = "Pending photo"))
+                    listOf(
+                        LocalMediaItem(
+                            uri = it.localUri,
+                            type = MediaType.IMAGE,
+                            displayName = "Pending photo",
+                            processedSizeBytes = it.post.mediaItems.singleOrNull()?.sizeBytes ?: 0L
+                        )
+                    )
                 } ?: emptyList(),
                 caption = pending?.post?.caption.orEmpty(),
                 pendingPhoto = pending,
@@ -147,7 +154,19 @@ class CreatePostViewModel @Inject constructor(
             }
             _uiState.value = _uiState.value.copy(
                 pendingPhoto = pending,
-                selectedMedia = listOf(media.copy(uri = pending.localUri)),
+                selectedMedia = listOf(
+                    media.copy(
+                        uri = pending.localUri,
+                        processedUri = pending.localUri,
+                        processedSizeBytes = pending.post.mediaItems.singleOrNull()?.sizeBytes ?: 0L,
+                        compressionRatio = if (media.originalSizeBytes > 0L) {
+                            (pending.post.mediaItems.singleOrNull()?.sizeBytes ?: 0L).toFloat() /
+                                media.originalSizeBytes.toFloat()
+                        } else {
+                            1f
+                        }
+                    )
+                ),
                 isProcessing = false,
                 isUploading = true,
                 uploadProgress = 0f

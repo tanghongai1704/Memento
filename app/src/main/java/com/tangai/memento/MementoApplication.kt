@@ -1,6 +1,10 @@
 package com.tangai.memento
 
 import android.app.Application
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
@@ -9,9 +13,25 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import dagger.hilt.android.HiltAndroidApp
 import java.io.File
+import okio.Path.Companion.toOkioPath
 
 @HiltAndroidApp
-class MementoApplication : Application() {
+class MementoApplication : Application(), SingletonImageLoader.Factory {
+    override fun newImageLoader(context: android.content.Context): ImageLoader =
+        ImageLoader.Builder(context)
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.20)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(context.cacheDir.resolve("image_cache").toOkioPath())
+                    .maxSizeBytes(100L * 1024L * 1024L)
+                    .build()
+            }
+            .build()
+
     override fun onCreate() {
         super.onCreate()
         FirebaseApp.initializeApp(this)

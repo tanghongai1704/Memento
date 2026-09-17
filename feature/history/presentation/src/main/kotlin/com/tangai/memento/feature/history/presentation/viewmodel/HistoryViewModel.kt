@@ -2,6 +2,7 @@ package com.tangai.memento.feature.history.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tangai.memento.domain.model.Post
 import com.tangai.memento.feature.history.domain.HistoryRepository
 import com.tangai.memento.ui.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,8 +16,8 @@ import javax.inject.Inject
 class HistoryViewModel @Inject constructor(
     private val historyRepository: HistoryRepository
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow<UiState<List<String>>>(UiState.Loading())
-    val uiState: StateFlow<UiState<List<String>>> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow<UiState<List<Post>>>(UiState.Loading())
+    val uiState: StateFlow<UiState<List<Post>>> = _uiState.asStateFlow()
 
     init {
         loadHistory()

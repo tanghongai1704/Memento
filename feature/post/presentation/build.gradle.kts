@@ -25,6 +25,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.coil.compose)
     implementation(project(":feature:connection:domain"))
     implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))

@@ -1,15 +1,13 @@
 package com.tangai.memento.feature.post.presentation.ui
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -42,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.domain.model.LocalMediaItem
 import com.tangai.memento.domain.model.MediaType
 import com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel
+import coil3.compose.AsyncImage
 
 @Composable
 fun MediaPickerScreen(
@@ -56,7 +54,17 @@ fun MediaPickerScreen(
     ) { uri ->
         if (uri != null) {
             val mediaType = MediaType.IMAGE
-            viewModel.addSelectedMedia(LocalMediaItem(uri = uri.toString(), type = mediaType, displayName = "photo_${System.currentTimeMillis()}"))
+            val originalSize = context.contentResolver.openAssetFileDescriptor(uri, "r")
+                ?.use { it.length.coerceAtLeast(0L) }
+                ?: 0L
+            viewModel.addSelectedMedia(
+                LocalMediaItem(
+                    uri = uri.toString(),
+                    type = mediaType,
+                    displayName = "photo_${System.currentTimeMillis()}",
+                    originalSizeBytes = originalSize
+                )
+            )
         }
     }
 
@@ -70,6 +78,7 @@ fun MediaPickerScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Text(
@@ -104,9 +113,6 @@ fun MediaPickerScreen(
                         .padding(bottom = 8.dp)
                 ) {
                     items(uiState.selectedMedia) { media ->
-                        val previewBitmap = remember(media.uri) {
-                            loadBitmapFromUri(context, media.thumbnailUri ?: media.uri)
-                        }
                         Box(
                             modifier = Modifier
                                 .size(110.dp)
@@ -116,20 +122,12 @@ fun MediaPickerScreen(
                                 .clickable { onNavigateToPreview() },
                             contentAlignment = Alignment.Center
                         ) {
-                            if (previewBitmap != null) {
-                                Image(
-                                    bitmap = previewBitmap.asImageBitmap(),
+                            AsyncImage(
+                                    model = media.thumbnailUri ?: media.uri,
                                     contentDescription = media.displayName,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
-                            } else {
-                                Text(
-                                    text = if (media.type == MediaType.VIDEO) "Video" else "Photo",
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(8.dp)
-                                )
-                            }
                             Row(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
@@ -165,17 +163,5 @@ fun MediaPickerScreen(
                 Text("Back")
             }
         }
-    }
-}
-
-private fun loadBitmapFromUri(context: Context, uriString: String?): Bitmap? {
-    if (uriString.isNullOrBlank()) return null
-    return try {
-        val uri = Uri.parse(uriString)
-        context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            BitmapFactory.decodeStream(inputStream)
-        }
-    } catch (_: Exception) {
-        null
     }
 }

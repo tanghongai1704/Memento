@@ -1,8 +1,5 @@
 package com.tangai.memento.feature.home.presentation.ui
 
-import android.graphics.BitmapFactory
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +43,7 @@ import com.tangai.memento.domain.model.Post
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.presentation.viewmodel.HomeViewModel
 import java.io.File
+import coil3.compose.AsyncImage
 
 @Composable
 fun HomeScreen(
@@ -261,14 +258,8 @@ fun PostCard(
             "pending_media/${post.connectionId}/${post.id}/${it.mediaId}.jpg",
         )
     }
-    val localBitmap: Bitmap? = remember(
-        post.id,
-        post.connectionId,
-        media?.mediaId,
-        mediaCacheRevision,
-        localFile?.lastModified()
-    ) {
-        localFile?.takeIf(File::exists)?.let { BitmapFactory.decodeFile(it.absolutePath) }
+    val cachedFile = remember(post.id, post.connectionId, media?.mediaId, mediaCacheRevision, localFile?.lastModified()) {
+        localFile?.takeIf(File::exists)
     }
     Card(
         modifier = Modifier
@@ -314,9 +305,9 @@ fun PostCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            if (localBitmap != null) {
-                Image(
-                    bitmap = localBitmap.asImageBitmap(),
+            if (cachedFile != null) {
+                AsyncImage(
+                    model = cachedFile,
                     contentDescription = post.caption ?: "Shared photo",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

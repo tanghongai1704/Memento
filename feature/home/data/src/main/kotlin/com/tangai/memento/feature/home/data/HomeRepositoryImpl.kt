@@ -289,7 +289,10 @@ class HomeRepositoryImpl @Inject constructor(
     private suspend fun cacheMedia(media: MediaItemEntity) {
         if (media.mediaType != MediaType.IMAGE) return
         val output = cachedMediaFile(media.connectionId, media.postId, media.mediaId)
-        if (output.exists() && output.length() == media.sizeBytes) return
+        if (output.exists() && output.length() == media.sizeBytes) {
+            output.setLastModified(System.currentTimeMillis())
+            return
+        }
 
         output.parentFile?.mkdirs()
         val partial = File(output.parentFile, "${output.name}.download")
@@ -299,9 +302,38 @@ class HomeRepositoryImpl @Inject constructor(
             check(partial.length() == media.sizeBytes) { "Downloaded photo size does not match its post." }
             if (output.exists()) check(output.delete()) { "Could not replace the cached photo." }
             check(partial.renameTo(output)) { "Could not move the downloaded photo into cache." }
+            trimOfflineMediaCache(output)
         } finally {
             if (partial.exists()) partial.delete()
         }
+    }
+
+    private suspend fun trimOfflineMediaCache(currentFile: File) {
+        val root = File(context.filesDir, "pending_media")
+        val files = root.walkTopDown()
+            .filter { it.isFile && !it.name.endsWith(".download") }
+            .toList()
+        var totalBytes = files.sumOf(File::length)
+        if (totalBytes <= OFFLINE_MEDIA_CACHE_BYTES) return
+
+        val uid = auth.currentUser?.uid
+        val protectedPaths = if (uid == null) {
+            emptySet()
+        } else {
+            database.postDao().getRetryablePosts(uid).flatMap { post ->
+                database.postDao().getMedia(post.connectionId, post.id).map { media ->
+                    cachedMediaFile(post.connectionId, post.id, media.mediaId).absolutePath
+                }
+            }.toSet()
+        }
+        files.asSequence()
+            .filter { it.absolutePath != currentFile.absolutePath && it.absolutePath !in protectedPaths }
+            .sortedBy(File::lastModified)
+            .forEach { file ->
+                if (totalBytes <= OFFLINE_MEDIA_CACHE_BYTES) return
+                val size = file.length()
+                if (file.delete()) totalBytes -= size
+            }
     }
     override suspend fun loadConnections(): Result<List<Connection>> = runCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
@@ -393,6 +425,7 @@ class HomeRepositoryImpl @Inject constructor(
     private companion object {
         const val POST_PAGE_SIZE = 20L
         const val DELETED_POST_PAGE_SIZE = 20L
+        const val OFFLINE_MEDIA_CACHE_BYTES = 200L * 1024L * 1024L
     }
 
     private data class PageTarget(

@@ -5,10 +5,13 @@ import androidx.core.net.toUri
 import androidx.room.withTransaction
 import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctionsException
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
+import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.UploadTask
 import com.tangai.memento.database.MementoDatabase
 import com.tangai.memento.database.model.MediaItemEntity
@@ -25,7 +28,10 @@ import com.tangai.memento.domain.model.PostStatus
 import com.tangai.memento.domain.model.PostType
 import com.tangai.memento.feature.post.domain.PendingPhotoPost
 import com.tangai.memento.feature.post.domain.PostRepository
+import com.tangai.memento.network.NetworkStatusProvider
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
@@ -38,7 +44,8 @@ class PostRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
     private val functions: FirebaseFunctions,
-    private val photoProcessor: PhotoProcessor
+    private val photoProcessor: PhotoProcessor,
+    private val networkStatusProvider: NetworkStatusProvider
 ) : PostRepository {
     override suspend fun preparePhotoPost(
         connectionId: String,
@@ -104,27 +111,34 @@ class PostRepositoryImpl @Inject constructor(
         check(localFile.exists() && localFile.length() == media.sizeBytes) {
             "The processed photo is missing. Please select it again."
         }
+        check(networkStatusProvider.isOnline()) {
+            "No internet connection. Your photo is saved on this device; reconnect and tap Retry upload."
+        }
 
         try {
             val metadata = StorageMetadata.Builder()
                 .setContentType("image/jpeg")
                 .setCustomMetadata("authorId", uid)
                 .build()
-            storage.reference.child(media.storagePath)
-                .putFile(localFile.toUri(), metadata)
-                .awaitUpload(onProgress)
-            val response = functions.getHttpsCallable("finalizePhotoPost").call(mapOf(
-                "connectionId" to post.connectionId,
-                "postId" to post.id,
-                "mediaId" to media.mediaId,
-                "clientCreatedAt" to post.clientCreatedAt,
-                "caption" to post.caption,
-                "storagePath" to media.storagePath,
-                "mimeType" to media.mimeType,
-                "width" to media.width,
-                "height" to media.height,
-                "sizeBytes" to media.sizeBytes
-            )).awaitTask().data as? Map<*, *> ?: error("Unexpected publish response.")
+            withTimeout(UPLOAD_TIMEOUT_MS) {
+                storage.reference.child(media.storagePath)
+                    .putFile(localFile.toUri(), metadata)
+                    .awaitUpload(onProgress)
+            }
+            val response = withTimeout(FINALIZE_TIMEOUT_MS) {
+                functions.getHttpsCallable("finalizePhotoPost").call(mapOf(
+                    "connectionId" to post.connectionId,
+                    "postId" to post.id,
+                    "mediaId" to media.mediaId,
+                    "clientCreatedAt" to post.clientCreatedAt,
+                    "caption" to post.caption,
+                    "storagePath" to media.storagePath,
+                    "mimeType" to media.mimeType,
+                    "width" to media.width,
+                    "height" to media.height,
+                    "sizeBytes" to media.sizeBytes
+                )).awaitTask().data as? Map<*, *> ?: error("Unexpected publish response.")
+            }
             val createdAt = (response["createdAtMillis"] as? Number)?.toLong()
                 ?: error("Publish response is missing its timestamp.")
             val updatedAt = (response["updatedAtMillis"] as? Number)?.toLong() ?: createdAt
@@ -142,7 +156,7 @@ class PostRepositoryImpl @Inject constructor(
             post.copy(createdAt = createdAt, updatedAt = updatedAt)
         } catch (error: Throwable) {
             database.postDao().updateSyncState(post.connectionId, post.id, LocalSyncStatus.FAILED)
-            throw error
+            throw error.asUploadError()
         }
     }
 
@@ -175,6 +189,38 @@ class PostRepositoryImpl @Inject constructor(
 
     private fun storagePath(connectionId: String, postId: String, mediaId: String) =
         "connections/$connectionId/posts/$postId/$mediaId.jpg"
+
+    private companion object {
+        const val UPLOAD_TIMEOUT_MS = 2 * 60 * 1000L
+        const val FINALIZE_TIMEOUT_MS = 30 * 1000L
+    }
+}
+
+private fun Throwable.asUploadError(): Throwable = when (this) {
+    is TimeoutCancellationException -> IllegalStateException(
+        "The upload timed out. Your photo is saved; check the connection and tap Retry upload.",
+        this
+    )
+    is FirebaseNetworkException -> IllegalStateException(
+        "The network connection was lost. Your photo is saved; reconnect and tap Retry upload.",
+        this
+    )
+    is FirebaseFunctionsException -> when (code) {
+        FirebaseFunctionsException.Code.UNAVAILABLE,
+        FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> IllegalStateException(
+            "The server could not be reached. Your photo is saved; tap Retry upload in a moment.",
+            this
+        )
+        else -> this
+    }
+    is StorageException -> when (errorCode) {
+        StorageException.ERROR_RETRY_LIMIT_EXCEEDED -> IllegalStateException(
+            "The upload could not finish on this connection. Your photo is saved; tap Retry upload.",
+            this
+        )
+        else -> this
+    }
+    else -> this
 }
 
 private suspend fun <T> Task<T>.awaitTask(): T = suspendCancellableCoroutine { continuation ->
