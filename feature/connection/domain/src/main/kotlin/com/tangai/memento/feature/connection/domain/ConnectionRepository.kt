@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface ConnectionRepository {
     suspend fun redeemDirectInvite(code: String): Result<String>
+    suspend fun disconnectDirect(connectionId: String): Result<Unit>
     suspend fun getCurrentUserConnections(): Result<List<Connection>>
     suspend fun loadConnections(): Result<List<User>>
     fun observeConnections(): Flow<Result<List<User>>>

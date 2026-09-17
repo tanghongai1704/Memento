@@ -24,6 +24,13 @@ class ConnectionFirestoreDataSource @Inject constructor(
         return data["connectionId"] as? String ?: error("Redeem response is missing its connection.")
     }
 
+    suspend fun disconnectDirect(connectionId: String): Long {
+        val data = functions.getHttpsCallable("disconnectDirect")
+            .call(mapOf("connectionId" to connectionId)).awaitTask().data.asMap()
+        return (data["updatedAtMillis"] as? Number)?.toLong()
+            ?: error("Disconnect response is missing its timestamp.")
+    }
+
     suspend fun getConnectionsForCurrentUser(): List<Connection> {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         return firestore.collection("connections")

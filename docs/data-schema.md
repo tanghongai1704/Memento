@@ -40,6 +40,10 @@ Pagination đã triển khai theo từng connection: status ACTIVE, createdAt DE
 
 Tạo postId/mediaId trước upload; giữ nguyên khi retry. Luồng đã triển khai: Room PENDING → xử lý JPEG → Storage → Callable `finalizePhotoPost` → Firestore transaction set Post + update connection.lastPostAt/updatedAt bằng cùng server timestamp → Room SYNCED. Backend đọc object thật, kiểm tra `contentType`, byte size và custom metadata `authorId`; post đã tồn tại chỉ được coi là retry thành công khi dữ liệu bất biến khớp, nên không reset createdAt. Firestore không atomic với Storage: retry dùng lại object, còn orphan cleanup thuộc bước 7. Soft delete metadata trước cleanup Storage.
 
+`softDeletePost(connectionId, postId)` chỉ cho member ACTIVE là tác giả gọi. Transaction đổi `status = DELETED`, ghi `deletedAt`, `deletedBy` và `updatedAt`; gọi lại cùng tác giả là idempotent. Client nghe thêm query `status == DELETED, updatedAt DESC, limit 20` để bài cũ đã tải cũng bị gỡ khỏi Room feed/cache dù không còn nằm trong trang 20 bài mới nhất. Composite index tương ứng có trong `firestore.indexes.json`.
+
+`disconnectDirect(connectionId)` chỉ áp dụng cho DIRECT và một trong hai member ACTIVE. Cùng transaction đổi connection sang `CLOSED`, xóa `memberIds`, chuyển cả hai member sang `LEFT` với `leftAt`, và đóng `directConnectionLocks/{directKey}`. Rules vì vậy thu hồi ngay quyền đọc connection/post/media. App cũng đổi membership local và xóa thư mục cache của connection; document lịch sử và Storage object vẫn được giữ cho chính sách cleanup bước 7. Kết nối lại tạo connection ID mới nên lịch sử cũ không tái xuất hiện.
+
 ## Room
 
 PostDao join posts/connections/membership theo current UID; filter All/connection/My/Received/type/time. Sắp xếp COALESCE(createdAt, clientCreatedAt) DESC. Lọc khoảng thời gian chỉ xét createdAt, như schema thảo luận. Composite PK (connectionId, postId) tránh giả định postId unique toàn cục. Các index posts(connectionId), posts(authorId), posts(createdAt), posts(status,createdAt), posts(connectionId,status,createdAt), connections(status), media_items(postId) có trong entities.
@@ -52,6 +56,6 @@ Với dữ liệu legacy còn gặp ở môi trường khác, export/backup trư
 
 ## Rules và triển khai
 
-`firestore.rules` cho phép profile owner writes và connection/member/Post reads đúng membership ACTIVE. Mã kết nối, lookup, lock, connection/member mutation và Post write vẫn khóa client; Admin SDK trong Functions thực hiện redeem và finalize post. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình. `firebase.json` quản lý Rules/index/Functions và Emulator, gồm Storage Emulator. Hai indexes đang READY. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
+`firestore.rules` cho phép profile owner writes và connection/member/Post reads đúng membership ACTIVE. Mã kết nối, lookup, lock, connection/member mutation và Post write vẫn khóa client; Admin SDK trong Functions thực hiện redeem, finalize post, soft delete và disconnect. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình; connection CLOSED hoặc member LEFT không còn quyền đọc/ghi. `firebase.json` quản lý Rules/index/Functions và Emulator, gồm Storage Emulator. Ba indexes đã deploy. Xem [tiến độ](mvp-progress.md) và [quy tắc MVP](mvp-baseline.md).
 
 Rules không lọc dữ liệu sau query; điều kiện query phải phù hợp quyền đọc. Tham khảo [Firebase query rules](https://firebase.google.com/docs/firestore/security/rules-query) và [transaction](https://firebase.google.com/docs/firestore/manage-data/transactions).

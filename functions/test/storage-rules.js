@@ -49,7 +49,19 @@ async function main() {
     assert.equal(downloaded.byteLength, 3);
     await assertFails(getBytes(ref(outsiderStorage, validPath)));
     await assertFails(deleteObject(ref(memberStorage, validPath)));
-    console.log("Storage rules: 9 path, membership, author, MIME, size, read and delete checks passed.");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "connections/c-photo"), {
+        status: "CLOSED", memberIds: [],
+      });
+      await setDoc(doc(context.firestore(), "connections/c-photo/members/member"), {status: "LEFT"});
+      await setDoc(doc(context.firestore(), "connections/c-photo/members/member2"), {status: "LEFT"});
+    });
+    await assertFails(getBytes(ref(memberStorage, validPath)));
+    await assertFails(uploadBytes(
+      ref(memberStorage, "connections/c-photo/posts/post-6/media-6.jpg"),
+      new Uint8Array([1]), {contentType: "image/jpeg", customMetadata: {authorId: "member"}},
+    ));
+    console.log("Storage rules: path, membership, author, MIME, size, read, delete and revoked-access checks passed.");
   } finally {
     await testEnv.cleanup();
   }

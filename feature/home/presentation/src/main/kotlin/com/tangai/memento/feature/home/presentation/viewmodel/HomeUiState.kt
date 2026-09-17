@@ -14,6 +14,7 @@ data class HomeUiState(
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val connectionIdsWithMore: Set<String> = emptySet(),
+    val deletingPostKeys: Set<String> = emptySet(),
     val errorMessage: String? = null
 ) {
     val hasMorePosts: Boolean

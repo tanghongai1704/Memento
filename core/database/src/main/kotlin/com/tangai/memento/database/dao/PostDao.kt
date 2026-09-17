@@ -47,6 +47,17 @@ abstract class PostDao {
         updatedAt: Long? = null
     )
 
+    @Query("""UPDATE posts SET status = 'DELETED', deletedAt = :deletedAt,
+        deletedBy = :deletedBy, updatedAt = :updatedAt, localSyncStatus = 'SYNCED'
+        WHERE connectionId = :connectionId AND id = :postId""")
+    abstract suspend fun markDeleted(
+        connectionId: String,
+        postId: String,
+        deletedBy: String,
+        deletedAt: Long,
+        updatedAt: Long
+    )
+
     @Transaction
     open suspend fun loadPosts(uid: String): List<Post> = getPosts(uid).map {
         it.toDomain(getMedia(it.connectionId, it.id).map { media -> media.toDomain() })

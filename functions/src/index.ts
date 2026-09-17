@@ -8,6 +8,11 @@ import {
 } from "./inviteService";
 import {parseFinalizePhotoInput} from "./postCore";
 import {finalizePhotoPost as finalizePhotoPostService} from "./postService";
+import {parseConnectionMutationInput, parsePostMutationInput} from "./lifecycleCore";
+import {
+  disconnectDirect as disconnectDirectService,
+  softDeletePost as softDeletePostService,
+} from "./lifecycleService";
 
 initializeApp();
 const db = getFirestore();
@@ -67,4 +72,46 @@ export const finalizePhotoPost = onCall(callableOptions, async (request) => {
     throw new HttpsError("already-exists", "This post ID is already in use.");
   }
   throw new HttpsError("failed-precondition", "The uploaded photo could not be verified.");
+});
+
+export const softDeletePost = onCall(callableOptions, async (request) => {
+  const uid = requireUid(request.auth);
+  const input = parsePostMutationInput(request.data);
+  if (!input) throw new HttpsError("invalid-argument", "Invalid post data.");
+  let result;
+  try {
+    result = await softDeletePostService(db, uid, input);
+  } catch (error) {
+    console.error("softDeletePost failed", error);
+    throw new HttpsError("internal", "Could not delete the post. Please retry.");
+  }
+  if (result.ok) return result;
+  if (result.reason === "NOT_AUTHOR") {
+    throw new HttpsError("permission-denied", "Only the author can delete this post.");
+  }
+  if (result.reason === "NOT_ACTIVE_MEMBER") {
+    throw new HttpsError("permission-denied", "This connection is no longer active.");
+  }
+  throw new HttpsError("not-found", "This post no longer exists.");
+});
+
+export const disconnectDirect = onCall(callableOptions, async (request) => {
+  const uid = requireUid(request.auth);
+  const input = parseConnectionMutationInput(request.data);
+  if (!input) throw new HttpsError("invalid-argument", "Invalid connection data.");
+  let result;
+  try {
+    result = await disconnectDirectService(db, uid, input);
+  } catch (error) {
+    console.error("disconnectDirect failed", error);
+    throw new HttpsError("internal", "Could not disconnect. Please retry.");
+  }
+  if (result.ok) return result;
+  if (result.reason === "NOT_DIRECT") {
+    throw new HttpsError("failed-precondition", "Only direct connections can be disconnected.");
+  }
+  if (result.reason === "NOT_ACTIVE_MEMBER") {
+    throw new HttpsError("permission-denied", "This connection is no longer active.");
+  }
+  throw new HttpsError("not-found", "This connection no longer exists.");
 });

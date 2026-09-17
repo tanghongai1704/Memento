@@ -2,6 +2,7 @@ package com.tangai.memento.feature.home.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.tangai.memento.domain.model.Post
 import com.tangai.memento.domain.model.User
 import com.tangai.memento.domain.model.displayLabel
@@ -17,7 +18,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val homeRepository: HomeRepository
+    private val homeRepository: HomeRepository,
+    private val auth: FirebaseAuth
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -117,6 +119,39 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun canDelete(post: Post): Boolean = post.authorId == auth.currentUser?.uid
+
+    fun deletePost(post: Post) {
+        if (!canDelete(post)) return
+        val postKey = post.key()
+        if (postKey in _uiState.value.deletingPostKeys) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                deletingPostKeys = _uiState.value.deletingPostKeys + postKey,
+                errorMessage = null
+            )
+            homeRepository.deletePost(post)
+                .onSuccess {
+                    val posts = homeRepository.loadPosts().getOrDefault(
+                        _uiState.value.posts.filterNot { it.key() == postKey }
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        posts = posts,
+                        authorLabels = loadAuthorLabels(posts),
+                        deletingPostKeys = _uiState.value.deletingPostKeys - postKey,
+                        mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        deletingPostKeys = _uiState.value.deletingPostKeys - postKey,
+                        errorMessage = error.message ?: "Could not delete this post."
+                    )
+                }
+        }
+    }
+
     fun getFilteredPosts(): List<Post> {
         return homeRepository.getFilteredPosts(_uiState.value.posts, _uiState.value.selectedFilter)
     }
@@ -128,4 +163,6 @@ class HomeViewModel @Inject constructor(
         homeRepository.loadUsers(posts.mapTo(mutableSetOf(), Post::authorId))
             .getOrDefault(emptyList())
             .associate { user -> user.id to "${user.displayName} (@${user.username})" }
+
+    private fun Post.key(): String = "$connectionId:$id"
 }

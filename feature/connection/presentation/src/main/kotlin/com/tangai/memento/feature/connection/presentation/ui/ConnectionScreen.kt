@@ -15,6 +15,21 @@ import com.tangai.memento.feature.connection.presentation.viewmodel.ConnectionVi
 @Composable
 fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val disconnectTarget = state.connectedUsers.firstOrNull { it.id == state.disconnectTargetUserId }
+
+    if (disconnectTarget != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::cancelDisconnect,
+            title = { Text("Disconnect from ${disconnectTarget.displayName}?") },
+            text = { Text("Shared moments from this connection will no longer be available. Reconnecting later starts a new history.") },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmDisconnect) { Text("Disconnect") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelDisconnect) { Text("Cancel") }
+            }
+        )
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -61,8 +76,20 @@ fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
         item { HorizontalDivider() }
         item { Text("Connected users", style = MaterialTheme.typography.titleLarge) }
         if (!state.isLoading && state.connectedUsers.isEmpty()) item { Text("No connections yet") }
-        items(state.connectedUsers, key = { "connected-" + it.id }) {
-            Text("${it.displayName} (@${it.username})")
+        items(state.connectedUsers, key = { "connected-" + it.id }) { user ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    "${user.displayName} (@${user.username})",
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
+                )
+                TextButton(
+                    onClick = { viewModel.requestDisconnect(user.id) },
+                    enabled = state.connectionIdsByUserId[user.id] != null &&
+                        state.disconnectingUserId != user.id
+                ) {
+                    Text(if (state.disconnectingUserId == user.id) "Disconnecting…" else "Disconnect")
+                }
+            }
         }
     }
 }

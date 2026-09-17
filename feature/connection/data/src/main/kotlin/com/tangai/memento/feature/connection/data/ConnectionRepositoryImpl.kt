@@ -1,5 +1,6 @@
 package com.tangai.memento.feature.connection.data
 
+import android.content.Context
 import androidx.room.withTransaction
 import com.google.firebase.auth.FirebaseAuth
 import com.tangai.memento.database.MementoDatabase
@@ -15,9 +16,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import javax.inject.Inject
 
 class ConnectionRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val database: MementoDatabase,
     private val firebaseAuth: FirebaseAuth,
     private val source: ConnectionFirestoreDataSource
@@ -30,15 +34,28 @@ class ConnectionRepositoryImpl @Inject constructor(
         connectionId
     }
 
+    override suspend fun disconnectDirect(connectionId: String): Result<Unit> = runCatching {
+        val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
+        val updatedAt = source.disconnectDirect(connectionId)
+        check(firebaseAuth.currentUser?.uid == uid) { "Account changed during disconnect." }
+        database.withTransaction {
+            database.connectionDao().markClosed(connectionId, updatedAt)
+            database.connectionMemberDao().markMembersLeft(connectionId, updatedAt)
+        }
+        clearConnectionMediaCache(connectionId)
+    }
+
     override suspend fun getCurrentUserConnections(): Result<List<Connection>> = runCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
         val connections = source.getConnectionsForCurrentUser()
         check(firebaseAuth.currentUser?.uid == uid) { "Account changed during sync." }
+        val revokedConnectionIds = mutableListOf<String>()
         database.withTransaction {
             // Revoke cached access when a connection closes or membership disappears.
             database.connectionMemberDao().getActiveMembershipsForUser(uid).forEach { membership ->
                 if (connections.none { it.id == membership.connectionId }) {
                     database.connectionMemberDao().upsertMember(membership.copy(status = MemberStatus.LEFT))
+                    revokedConnectionIds += membership.connectionId
                 }
             }
             connections.forEach { connection ->
@@ -46,6 +63,7 @@ class ConnectionRepositoryImpl @Inject constructor(
                 connection.members.forEach { database.connectionMemberDao().upsertMember(it.toEntity(connection.id)) }
             }
         }
+        revokedConnectionIds.forEach(::clearConnectionMediaCache)
         connections
     }
 
@@ -85,5 +103,10 @@ class ConnectionRepositoryImpl @Inject constructor(
             check(firebaseAuth.currentUser?.uid == uid) { "Account changed during search." }
             users.forEach { database.userDao().upsertUser(it.toEntity()) }
         }
+    }
+
+    private fun clearConnectionMediaCache(connectionId: String) {
+        if (!connectionId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) return
+        File(context.filesDir, "pending_media/$connectionId").deleteRecursively()
     }
 }

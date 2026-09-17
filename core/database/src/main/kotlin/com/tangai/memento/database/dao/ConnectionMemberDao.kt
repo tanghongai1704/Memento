@@ -36,4 +36,8 @@ interface ConnectionMemberDao {
 
     @Query("SELECT * FROM connection_members WHERE userId = :userId AND status = 'ACTIVE'")
     suspend fun getActiveMembershipsForUser(userId: String): List<ConnectionMemberEntity>
+
+    @Query("""UPDATE connection_members SET status = 'LEFT', leftAt = :leftAt, removedBy = NULL
+        WHERE connectionId = :connectionId AND status = 'ACTIVE'""")
+    suspend fun markMembersLeft(connectionId: String, leftAt: Long)
 }

@@ -6,6 +6,7 @@ const {
   redeemDirectInvite,
 } = require("../lib/inviteService");
 const {finalizePhotoPost} = require("../lib/postService");
+const {disconnectDirect, softDeletePost} = require("../lib/lifecycleService");
 
 initializeApp({projectId: "demo-memento-schema"});
 const db = getFirestore();
@@ -69,8 +70,39 @@ async function main() {
       `connections/${connection.id}/posts/bad-media/media-photo.jpg`}, async () => false,
   );
   assert.equal(rejectedMedia.reason, "MEDIA_INVALID");
+  const rejectedDelete = await softDeletePost(db, "redeemer-b", {
+    connectionId: connection.id, postId: "post-photo",
+  });
+  assert.equal(rejectedDelete.reason, "NOT_AUTHOR");
+  const deleted = await softDeletePost(db, "creator-a", {
+    connectionId: connection.id, postId: "post-photo",
+  });
+  assert.equal(deleted.ok, true);
+  assert.deepEqual(await softDeletePost(db, "creator-a", {
+    connectionId: connection.id, postId: "post-photo",
+  }), deleted);
+  assert.equal((await connection.ref.collection("posts").doc("post-photo").get()).get("status"), "DELETED");
+  assert.equal((await disconnectDirect(db, "redeemer-e", {connectionId: connection.id})).reason,
+    "NOT_ACTIVE_MEMBER");
+  const disconnected = await disconnectDirect(db, "redeemer-b", {connectionId: connection.id});
+  assert.equal(disconnected.ok, true);
+  const closed = await connection.ref.get();
+  assert.equal(closed.get("status"), "CLOSED");
+  assert.deepEqual(closed.get("memberIds"), []);
+  const closedMembers = await connection.ref.collection("members").get();
+  closedMembers.docs.forEach((member) => assert.equal(member.get("status"), "LEFT"));
+  assert.equal((await disconnectDirect(db, "creator-a", {connectionId: connection.id})).ok, true);
+  const rejectedAfterDisconnect = await finalizePhotoPost(
+    db, "creator-a", {...photoInput, postId: "after-disconnect", storagePath:
+      `connections/${connection.id}/posts/after-disconnect/media-photo.jpg`}, async () => true,
+  );
+  assert.equal(rejectedAfterDisconnect.reason, "NOT_ACTIVE_MEMBER");
+  const reconnected = await redeemDirectInvite(db, "redeemer-b", created.code);
+  assert.equal(reconnected.ok, true);
+  assert.notEqual(reconnected.connectionId, connection.id);
   console.log("Permanent invite code checks passed: stable code, reusable code, self guard, invalid code, idempotent pair lock.");
   console.log("Photo finalize emulator checks passed: membership, media verification, atomic metadata, idempotent retry.");
+  console.log("Lifecycle checks passed: author-only soft delete, disconnect revocation, idempotency and reconnect isolation.");
 }
 
 main().catch((error) => {

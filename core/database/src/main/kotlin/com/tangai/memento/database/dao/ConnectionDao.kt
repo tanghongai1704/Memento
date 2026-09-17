@@ -37,4 +37,7 @@ interface ConnectionDao {
 
     @Query("UPDATE connections SET lastPostAt = :lastPostAt, updatedAt = :updatedAt WHERE id = :connectionId")
     suspend fun updateActivity(connectionId: String, lastPostAt: Long, updatedAt: Long)
+
+    @Query("UPDATE connections SET status = 'CLOSED', updatedAt = :updatedAt WHERE id = :connectionId")
+    suspend fun markClosed(connectionId: String, updatedAt: Long)
 }

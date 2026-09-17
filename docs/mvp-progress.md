@@ -10,8 +10,8 @@
 | 2 | Auth/profile tối thiểu và quên mật khẩu | Hoàn tất — 13/09/2026 |
 | 3 | Direct invite và transaction chống trùng | Hoàn tất — 13/09/2026 |
 | 4 | Đăng một ảnh thật: Room → Storage → Firestore | Hoàn tất — 14/09/2026 |
-| 5 | Đồng bộ người nhận, Home, pagination | Tiếp theo |
-| 6 | History, soft delete và disconnect | Chưa bắt đầu |
+| 5 | Đồng bộ người nhận, Home, pagination | Hoàn tất — 17/09/2026 |
+| 6 | History, soft delete và disconnect | Hoàn tất — 17/09/2026 |
 | 7 | Offline, retry, khôi phục sau tắt app, cleanup | Chưa bắt đầu |
 | 8 | Kiểm thử toàn hành trình trên hai thiết bị | Chưa bắt đầu |
 
@@ -192,3 +192,28 @@ Mở quyền đọc Post đúng membership, đồng bộ từng connection theo 
 - Trạng thái `hasMore` và `isLoadingMore` được đưa lên Home UI. Nút tải thêm tự ẩn khi mọi connection đã hết trang; lỗi giữ nguyên feed hiện tại để người dùng retry.
 - Key Compose của Post card gồm cả `connectionId:postId`, đúng với khóa dữ liệu và tránh va chạm nếu hai connection tình cờ có cùng postId.
 - Android debug build, 5 unit tests Functions và Firestore Rules emulator đều đạt sau thay đổi.
+
+## 17/09/2026 — bước 6: soft delete và disconnect
+
+### Đã làm
+
+- Tác giả có nút `Delete` trên bài của mình và phải xác nhận trước khi xóa. Người nhận không thấy thao tác này. Callable `softDeletePost` kiểm tra Auth, App Check, membership ACTIVE và `authorId`, sau đó chỉ đổi metadata sang `DELETED` cùng `deletedAt/deletedBy/updatedAt`; gọi lại an toàn và không hard-delete document.
+- Home nghe cả trang bài mới lẫn 20 bản ghi `DELETED` cập nhật gần nhất cho từng connection. Khi nhận trạng thái xóa, Room đổi trạng thái, feed/History tự ẩn bài và file cache do app quản lý được xóa.
+- Mỗi direct connection có thao tác `Disconnect` với hộp xác nhận. Callable `disconnectDirect` đóng connection, làm rỗng `memberIds`, chuyển cả hai member sang `LEFT`, ghi `leftAt` và đóng direct lock trong cùng transaction.
+- Sau disconnect, query connection không còn trả document cho hai user; Firestore/Storage Rules từ chối đọc lịch sử và media. App thu hồi membership local, ẩn Home/History và xóa cache ảnh của connection. Dùng lại mã kết nối sẽ tạo connection ID mới, không khôi phục lịch sử cũ.
+- Thêm composite index `posts(status, updatedAt DESC)` cho listener xóa và đã deploy hai callable cùng index lên `memento-fre`.
+
+### Bằng chứng kiểm tra
+
+- 7 unit tests Functions đạt. Integration Firestore Emulator đạt author-only delete, recipient/outsider bị từ chối, delete/disconnect idempotent, finalize bị từ chối sau disconnect và reconnect tạo lịch sử mới.
+- Firestore Rules Emulator đạt query ACTIVE/DELETED khi còn membership và từ chối connection/member/post sau khi đóng. Storage Rules Emulator từ chối download/upload sau khi membership chuyển LEFT.
+- Toàn bộ Android `testDebugUnitTest` và debug APK build thành công. APK được cài đè giữ dữ liệu trên hai emulator: Alice thấy `Delete` ở bài của Alice, Andy không thấy; cả hai thấy `Disconnect` ở danh sách kết nối.
+- Không bấm xác nhận xóa hoặc disconnect trên dữ liệu thật Alice/Andy; kiểm thử mutation đầy đủ dùng emulator để giữ nguyên dữ liệu demo.
+
+### Chốt bước 6
+
+Soft delete và direct disconnect đã hoàn chỉnh từ UI, local cache đến backend/rules. Storage object của bài soft-delete chưa bị xóa ngay để giữ thứ tự metadata trước cleanup; job cleanup orphan/soft-deleted media thuộc bước 7.
+
+### Tiếp theo — bước 7
+
+Hoàn thiện offline/retry và phục hồi tiến trình khi app bị dừng giữa upload/finalize; định nghĩa rồi triển khai cleanup an toàn cho orphan object và media của bài đã soft-delete, có thời gian chờ để không đua với retry.
