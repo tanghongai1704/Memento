@@ -13,7 +13,7 @@
 | 5 | Đồng bộ người nhận, Home, pagination | Hoàn tất — 17/09/2026 |
 | 6 | History, soft delete và disconnect | Hoàn tất — 17/09/2026 |
 | 7 | Offline, retry, khôi phục sau tắt app, cleanup | Hoàn tất — 17/09/2026 |
-| 8 | Kiểm thử toàn hành trình trên hai thiết bị | Chưa bắt đầu |
+| 8 | Kiểm thử toàn hành trình trên hai phiên người dùng độc lập | Hoàn tất — 17/09/2026 |
 
 Mốc demo: hoàn thành bước 5. Mốc MVP tạm ổn: hoàn thành bước 8. Quy tắc làm việc ở [mvp-baseline](mvp-baseline.md).
 
@@ -242,3 +242,27 @@ App có đường phục hồi thủ công rõ ràng và idempotent sau lỗi m�
 ### Tiếp theo — bước 8
 
 Chạy checklist toàn hành trình trên hai thiết bị: tạo/redeem, gửi/nhận, pagination, force-stop giữa upload, retry, xóa, disconnect, reconnect và đổi tài khoản; ghi lại kết quả cuối mà không dùng dữ liệu production nếu thao tác phá hủy lịch sử demo.
+
+## 17/09/2026 — bước 8: kiểm thử toàn hành trình
+
+### Đã làm
+
+- Chạy Firebase Emulator Suite cho Auth, Firestore, Functions và Storage bằng đúng project ID `memento-fre`; thêm manifest chỉ dành cho debug để cho phép kết nối HTTP tới Emulator. Callable vẫn bắt buộc App Check ở production nhưng bỏ enforcement khi chạy trong Functions Emulator.
+- Dùng hai Android user profile độc lập trên cùng emulator làm Alice và Bob. Mỗi profile có Auth session, Room database, cache và process riêng; dữ liệu production không được dùng cho các thao tác xóa/ngắt kết nối.
+- Chạy xuyên suốt: đăng nhập hai tài khoản, redeem mã mời, nhận connection qua listener, chọn ảnh bằng Android Photo Picker, đăng ảnh, nhận ảnh, soft delete, disconnect, dùng lại mã mời để tạo connection mới và xác nhận lịch sử cũ không quay lại.
+- Sửa lỗi tên tác giả sau khi Alice đăng bài: Home trước đây chỉ tìm profile tác giả trong Room nên có thể hiện `Unknown author`. Repository giờ tải profile còn thiếu từ Firestore, kiểm tra tài khoản không đổi giữa lúc tải rồi cache lại vào Room.
+- Kiểm tra phục hồi upload bằng cách ngắt đường tới Storage/Functions giữa lúc upload rồi force-stop app. Khi mở lại, Create Post hiện `Resume pending upload`; `Retry upload` dùng lại draft/path cũ và chỉ tạo đúng một Post `ACTIVE`.
+- Kiểm tra pagination từ trạng thái Room sạch với 25 Post trong connection Emulator: trang đầu dừng ở 20 bài và hiện `Load older moments`; tải tiếp hiển thị đủ các bài cũ còn lại, không còn nút tải thêm.
+- Photo Picker xác nhận app chỉ nhận quyền truy cập ảnh được chọn; không xuất hiện yêu cầu quyền đọc toàn bộ media. Người nhận nhìn thấy đúng tên Alice và không có nút `Delete`; Alice có quyền xóa bài của mình.
+
+### Bằng chứng kiểm tra
+
+- Android `:feature:home:data:testDebugUnitTest` và `:app:assembleDebug` hoàn tất thành công.
+- Firestore xác nhận Post đầu có đúng `authorId` của Alice; sau soft delete có `status = DELETED` và `deletedBy` là Alice. Listener của cả Alice và Bob đều ẩn bài.
+- Disconnect chuyển connection cũ sang `CLOSED` và xóa membership. Reconnect bằng cùng mã mời tạo connection ID mới `ACTIVE`; Home mới không đọc lại lịch sử connection cũ.
+- Sau retry upload, connection mới chỉ có đúng một Post được finalize `ACTIVE`. Bob nhận bài qua listener, thấy tác giả Alice và không có thao tác xóa.
+- Pagination được kiểm tra sau khi xóa app data của riêng profile Bob để loại cache cũ, đăng nhập lại rồi tải 20 + 5 bài từ Emulator.
+
+### Chốt bước 8
+
+Hành trình MVP đã đạt trên hai sandbox người dùng độc lập, gồm quyền Photo Picker, realtime listener, pagination, process-death recovery và vòng đời delete/disconnect/reconnect. Trước khi phát hành rộng vẫn nên smoke-test thêm trên hai thiết bị vật lý khác phiên bản Android và mạng thật; đây là release check, không phải phần logic MVP còn thiếu.

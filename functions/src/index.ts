@@ -19,7 +19,10 @@ import {cleanupExpiredMedia as cleanupExpiredMediaService} from "./cleanupServic
 
 initializeApp();
 const db = getFirestore();
-const callableOptions = {region: "asia-southeast1", enforceAppCheck: true};
+const callableOptions = {
+  region: "asia-southeast1",
+  enforceAppCheck: process.env.FUNCTIONS_EMULATOR !== "true",
+};
 
 function requireUid(auth: {uid: string} | undefined): string {
   if (!auth) throw new HttpsError("unauthenticated", "Please sign in and try again.");

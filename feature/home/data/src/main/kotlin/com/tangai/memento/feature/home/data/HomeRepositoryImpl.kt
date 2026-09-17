@@ -15,6 +15,7 @@ import com.tangai.memento.database.MementoDatabase
 import com.tangai.memento.database.model.MediaItemEntity
 import com.tangai.memento.database.model.PostEntity
 import com.tangai.memento.database.model.toDomain
+import com.tangai.memento.database.model.toEntity
 import com.tangai.memento.domain.model.*
 import com.tangai.memento.feature.home.domain.*
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -216,8 +217,16 @@ class HomeRepositoryImpl @Inject constructor(
 
     override suspend fun loadUsers(userIds: Set<String>): Result<List<User>> = runCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
-        userIds.mapNotNull { database.userDao().getUserById(it)?.toDomain() }
-            .also { check(auth.currentUser?.uid == uid) { "Account changed while loading authors." } }
+        val cachedUsers = userIds.mapNotNull { database.userDao().getUserById(it)?.toDomain() }
+            .associateBy(User::id)
+        val remoteUsers = (userIds - cachedUsers.keys).mapNotNull { authorId ->
+            firestore.collection("users").document(authorId).get().awaitTask().toUser()
+        }
+        check(auth.currentUser?.uid == uid) { "Account changed while loading authors." }
+        remoteUsers.forEach { database.userDao().upsertUser(it.toEntity()) }
+        (cachedUsers.values + remoteUsers).also {
+            check(auth.currentUser?.uid == uid) { "Account changed while loading authors." }
+        }
     }
 
     private suspend fun storePost(
@@ -331,6 +340,22 @@ class HomeRepositoryImpl @Inject constructor(
         schemaVersion = (getLong("schemaVersion") ?: 1).toInt(),
         localSyncStatus = LocalSyncStatus.SYNCED
     )
+
+    private fun DocumentSnapshot.toUser(): User? {
+        if (!exists()) return null
+        val username = getString("username") ?: return null
+        return User(
+            id = id,
+            username = username,
+            displayName = getString("displayName") ?: username,
+            usernameNormalized = getString("usernameNormalized") ?: normalizeUsername(username),
+            avatarPath = getString("avatarPath"),
+            bio = getString("bio"),
+            createdAt = getTimestamp("createdAt")?.toDate()?.time ?: 0,
+            updatedAt = getTimestamp("updatedAt")?.toDate()?.time ?: 0,
+            schemaVersion = (getLong("schemaVersion") ?: 1).toInt()
+        )
+    }
 
     private fun DocumentSnapshot.toMediaEntities(connectionId: String): List<MediaItemEntity> =
         (get("mediaItems") as? List<*>)?.mapNotNull { raw ->
