@@ -16,7 +16,7 @@ MVP ưu tiên DIRECT, PHOTO, SINGLE. Có nhiều connection direct, mỗi cặp 
 - bio: nullable, tối đa 500 ký tự.
 - Email/password ở Firebase Auth. Profile công khai không có email, uid field hoặc friendList.
 - Profile tối thiểu đã hoàn thành ở bước 2: hiển thị dữ liệu thật, sửa displayName/username/bio và reset password. Avatar upload làm cùng hạ tầng Storage sau, không chặn MVP ảnh.
-- Không công bố khởi động offline đã hoàn thiện: Splash hiện cần mạng. Cải thiện session/cache thuộc bước 7.
+- Khi Firebase Auth còn session hợp lệ và Room có profile đúng UID, Splash được phép vào app bằng cache nếu Firestore/Functions báo lỗi mạng. Lỗi quyền hoặc dữ liệu sai không được fallback và vẫn đăng xuất.
 
 ## Direct invite (bước 3)
 
@@ -54,7 +54,7 @@ Video hiện chỉ tạo thumbnail và còn dùng số dung lượng ước lư�
 - Một trong hai thành viên direct có thể disconnect. Backend đóng connection (`CLOSED`), làm rỗng memberIds và chuyển cả hai membership sang LEFT, ghi leftAt; không hard-delete lịch sử.
 - Sau đồng bộ, connection đóng và bài của nó không hiện trong Home/History; Firestore/Storage từ chối truy cập mới. Thu hồi quyền không thể lấy lại file đã được người nhận tải hoặc sao chép ngoài app.
 - Ghép lại tạo connection mới; không mở lại lịch sử connection cũ. Có thể giải phóng khóa direct cũ trong transaction khi đóng.
-- Bài ACTIVE trong connection ACTIVE không có thời hạn tự xóa. Cleanup orphan/soft-deleted media sẽ có chính sách cụ thể ở bước 7.
+- Bài ACTIVE trong connection ACTIVE không có thời hạn tự xóa. Job backend chạy hằng ngày chỉ xóa object đúng path media của app khi object đã tồn tại ít nhất 7 ngày và (a) không có Post tương ứng, hoặc (b) Post đã DELETED ít nhất 7 ngày và metadata Post tham chiếu đúng object đó. Khoảng chờ cho phép retry an toàn; metadata Post không bị hard-delete bởi job này.
 - GROUP chưa trong MVP; quyền xem trước joinedAt, chuyển owner và rejoin phải được chốt riêng trước khi bật group. Tuyệt đối không biến DIRECT thành GROUP.
 
 ## Điều kiện hoàn tất MVP

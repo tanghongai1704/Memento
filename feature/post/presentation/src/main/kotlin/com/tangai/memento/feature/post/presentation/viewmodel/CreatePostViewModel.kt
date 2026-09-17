@@ -95,6 +95,27 @@ class CreatePostViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(selectedMedia = emptyList(), pendingPhoto = null)
     }
 
+    fun discardPendingPhoto() {
+        val pending = _uiState.value.pendingPhoto ?: return
+        viewModelScope.launch {
+            postRepository.discardPendingPhoto(pending)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        selectedMedia = emptyList(),
+                        pendingPhoto = null,
+                        uploadProgress = 0f,
+                        errorMessage = null,
+                        successMessage = "Pending photo discarded."
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "Could not discard the pending photo."
+                    )
+                }
+        }
+    }
+
     fun onCaptionChanged(value: String) {
         if (value.length <= 1000) _uiState.value = _uiState.value.copy(caption = value, errorMessage = null)
     }

@@ -12,7 +12,7 @@
 | 4 | Đăng một ảnh thật: Room → Storage → Firestore | Hoàn tất — 14/09/2026 |
 | 5 | Đồng bộ người nhận, Home, pagination | Hoàn tất — 17/09/2026 |
 | 6 | History, soft delete và disconnect | Hoàn tất — 17/09/2026 |
-| 7 | Offline, retry, khôi phục sau tắt app, cleanup | Chưa bắt đầu |
+| 7 | Offline, retry, khôi phục sau tắt app, cleanup | Hoàn tất — 17/09/2026 |
 | 8 | Kiểm thử toàn hành trình trên hai thiết bị | Chưa bắt đầu |
 
 Mốc demo: hoàn thành bước 5. Mốc MVP tạm ổn: hoàn thành bước 8. Quy tắc làm việc ở [mvp-baseline](mvp-baseline.md).
@@ -217,3 +217,28 @@ Soft delete và direct disconnect đã hoàn chỉnh từ UI, local cache đến
 ### Tiếp theo — bước 7
 
 Hoàn thiện offline/retry và phục hồi tiến trình khi app bị dừng giữa upload/finalize; định nghĩa rồi triển khai cleanup an toàn cho orphan object và media của bài đã soft-delete, có thời gian chờ để không đua với retry.
+
+## 17/09/2026 — bước 7: offline recovery, retry và cleanup
+
+### Đã làm
+
+- Splash không còn đăng xuất session chỉ vì mất mạng. Khi Auth vẫn có user và Room có profile đúng UID, lỗi mạng từ Firestore/Functions dùng cache để vào app; lỗi permission hoặc dữ liệu không hợp lệ vẫn thất bại bình thường.
+- Draft ảnh `PENDING/FAILED` tiếp tục giữ nguyên `postId`, `mediaId`, file JPEG và metadata. Khi mở lại Create Post, app chọn đúng connection và hiển thị `Resume pending upload`, đưa thẳng tới preview để retry cùng Storage path/finalize idempotent.
+- Chặn tạo draft mới khi còn draft hợp lệ. Draft bị gián đoạn trước khi có media hoặc có file sai byte size được dọn khỏi Room/cache; draft hợp lệ chỉ bị bỏ khi người dùng xác nhận `Discard draft`.
+- Thêm scheduled Function `cleanupExpiredMedia` chạy hằng ngày lúc 03:00 giờ Việt Nam. Job chỉ xét đúng path media của app và dùng grace period 7 ngày: xóa orphan không có Post hoặc object được Post `DELETED` tham chiếu sau khi cả object/deletedAt đủ tuổi; giữ bài ACTIVE, media mới, path lạ và metadata Post.
+- Đã deploy scheduled Function lên `memento-fre`; không kích hoạt thủ công để tránh xóa dữ liệu thật ngoài lịch/chính sách.
+
+### Bằng chứng kiểm tra
+
+- 11 Functions unit tests đạt, gồm parser path, grace period và cleanup service với orphan/deleted/active/recent/mismatch. Integration Firestore Emulator cho invite, finalize idempotent, delete/disconnect/reconnect vẫn đạt.
+- Toàn bộ Android `testDebugUnitTest` và debug APK build thành công sau thay đổi Room/repository/navigation.
+- Cài đè APK trên hai emulator giữ nguyên dữ liệu. Trên Alice, tắt Wi‑Fi và mobile data, force-stop rồi mở lại vẫn vào app với Home/navigation từ cache; không bị chuyển về Login. Mạng đã được bật lại sau kiểm tra.
+- `firebase functions:list` xác nhận `cleanupExpiredMedia` là scheduled function Node.js 22 tại `asia-southeast1`.
+
+### Chốt bước 7
+
+App có đường phục hồi thủ công rõ ràng và idempotent sau lỗi mạng/process death, không tự tạo bài trùng. Cleanup có phạm vi path hẹp và khoảng chờ 7 ngày. Bản sao file người dùng đã lưu ngoài vùng riêng của app không thể bị thu hồi.
+
+### Tiếp theo — bước 8
+
+Chạy checklist toàn hành trình trên hai thiết bị: tạo/redeem, gửi/nhận, pagination, force-stop giữa upload, retry, xóa, disconnect, reconnect và đổi tài khoản; ghi lại kết quả cuối mà không dùng dữ liệu production nếu thao tác phá hủy lịch sử demo.

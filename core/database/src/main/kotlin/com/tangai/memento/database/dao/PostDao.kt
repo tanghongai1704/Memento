@@ -58,6 +58,10 @@ abstract class PostDao {
         updatedAt: Long
     )
 
+    @Query("""DELETE FROM posts WHERE connectionId = :connectionId AND id = :postId
+        AND localSyncStatus IN ('PENDING', 'FAILED')""")
+    abstract suspend fun deleteLocalDraft(connectionId: String, postId: String): Int
+
     @Transaction
     open suspend fun loadPosts(uid: String): List<Post> = getPosts(uid).map {
         it.toDomain(getMedia(it.connectionId, it.id).map { media -> media.toDomain() })

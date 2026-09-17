@@ -2,6 +2,8 @@ import {initializeApp} from "firebase-admin/app";
 import {getFirestore} from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
+import {onSchedule} from "firebase-functions/v2/scheduler";
+import {logger} from "firebase-functions";
 import {
   getMyInviteCode as getMyInviteCodeService,
   redeemDirectInvite as redeemDirectInviteService,
@@ -13,6 +15,7 @@ import {
   disconnectDirect as disconnectDirectService,
   softDeletePost as softDeletePostService,
 } from "./lifecycleService";
+import {cleanupExpiredMedia as cleanupExpiredMediaService} from "./cleanupService";
 
 initializeApp();
 const db = getFirestore();
@@ -114,4 +117,15 @@ export const disconnectDirect = onCall(callableOptions, async (request) => {
     throw new HttpsError("permission-denied", "This connection is no longer active.");
   }
   throw new HttpsError("not-found", "This connection no longer exists.");
+});
+
+export const cleanupExpiredMedia = onSchedule({
+  region: "asia-southeast1",
+  schedule: "every day 03:00",
+  timeZone: "Asia/Ho_Chi_Minh",
+  timeoutSeconds: 540,
+  memory: "256MiB",
+}, async () => {
+  const result = await cleanupExpiredMediaService(db, getStorage().bucket());
+  logger.info("Media cleanup completed", result);
 });

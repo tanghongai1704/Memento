@@ -27,6 +27,7 @@ import com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewMode
 @Composable
 fun CreatePostScreen(
     onNavigateToMediaPicker: () -> Unit,
+    onNavigateToPreview: () -> Unit,
     onNavigateBack: () -> Unit,
     homeUiState: Any? = null,
     viewModel: CreatePostViewModel = hiltViewModel()
@@ -107,13 +108,16 @@ fun CreatePostScreen(
             }
 
             Button(
-                onClick = { onNavigateToMediaPicker() },
+                onClick = {
+                    if (createPostUiState.pendingPhoto == null) onNavigateToMediaPicker()
+                    else onNavigateToPreview()
+                },
                 enabled = createPostUiState.selectedRecipient != null,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .padding(8.dp)
             ) {
-                Text("Continue")
+                Text(if (createPostUiState.pendingPhoto == null) "Continue" else "Resume pending upload")
             }
 
             Button(

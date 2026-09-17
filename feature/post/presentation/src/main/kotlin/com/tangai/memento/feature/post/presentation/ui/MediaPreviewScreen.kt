@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +26,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,11 +50,29 @@ fun MediaPreviewScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var confirmDiscard by remember { mutableStateOf(false) }
     val previewMedia = uiState.selectedMedia.firstOrNull()
     val previewBitmap = remember(previewMedia?.uri, previewMedia?.thumbnailUri) {
         if (previewMedia == null) null else loadBitmapFromUri(
             context,
             previewMedia.thumbnailUri ?: previewMedia.uri
+        )
+    }
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Discard pending photo?") },
+            text = { Text("The local draft will be removed. An unfinished server upload is cleaned up after the safety window.") },
+            confirmButton = {
+                Button(onClick = {
+                    confirmDiscard = false
+                    viewModel.discardPendingPhoto()
+                }) { Text("Discard") }
+            },
+            dismissButton = {
+                Button(onClick = { confirmDiscard = false }) { Text("Keep") }
+            }
         )
     }
 
@@ -148,12 +169,16 @@ fun MediaPreviewScreen(
                 ) {
                     Button(
                         onClick = {
-                            viewModel.removeSelectedMedia(previewMedia?.uri ?: "")
+                            if (uiState.pendingPhoto == null) {
+                                viewModel.removeSelectedMedia(previewMedia?.uri ?: "")
+                            } else {
+                                confirmDiscard = true
+                            }
                         },
                         enabled = previewMedia != null,
                         modifier = Modifier.padding(8.dp)
                     ) {
-                        Text("Remove")
+                        Text(if (uiState.pendingPhoto == null) "Remove" else "Discard draft")
                     }
 
                     Button(

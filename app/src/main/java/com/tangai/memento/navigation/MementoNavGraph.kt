@@ -261,6 +261,9 @@ fun MementoNavGraph() {
                         onNavigateToMediaPicker = {
                             navController.navigate(MementoRoute.MediaPicker.route)
                         },
+                        onNavigateToPreview = {
+                            navController.navigate(MementoRoute.MediaPreview.route)
+                        },
                         onNavigateBack = {
                             navController.popBackStack()
                         }

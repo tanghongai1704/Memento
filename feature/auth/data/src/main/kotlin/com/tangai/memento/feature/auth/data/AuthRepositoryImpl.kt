@@ -1,7 +1,10 @@
 package com.tangai.memento.feature.auth.data
 
+import com.google.firebase.FirebaseNetworkException
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.functions.FirebaseFunctionsException
 import com.google.firebase.functions.FirebaseFunctions
 import com.tangai.memento.database.dao.UserDao
 import com.tangai.memento.database.model.toEntity
@@ -83,6 +86,10 @@ class AuthRepositoryImpl @Inject constructor(
         check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) { "Account changed during sync." }
         userDao.upsertUser(profile.toEntity())
         getCurrentUserInviteCode().getOrThrow()
+        Unit
+    }.recoverCatching { error ->
+        val uid = firebaseAuthDataSource.currentUser()?.uid ?: throw error
+        if (!error.isOfflineFailure() || userDao.getUserById(uid) == null) throw error
     }
 
     override suspend fun getCurrentUserProfile(): Result<User> = runCatching {
@@ -177,5 +184,14 @@ class AuthRepositoryImpl @Inject constructor(
             else -> RegisterError.Unknown(message)
         }
         return RegisterException(error)
+    }
+
+    private fun Throwable.isOfflineFailure(): Boolean = when (this) {
+        is FirebaseNetworkException -> true
+        is FirebaseFirestoreException -> code == FirebaseFirestoreException.Code.UNAVAILABLE ||
+            code == FirebaseFirestoreException.Code.DEADLINE_EXCEEDED
+        is FirebaseFunctionsException -> code == FirebaseFunctionsException.Code.UNAVAILABLE ||
+            code == FirebaseFunctionsException.Code.DEADLINE_EXCEEDED
+        else -> cause?.takeIf { it !== this }?.isOfflineFailure() == true
     }
 }

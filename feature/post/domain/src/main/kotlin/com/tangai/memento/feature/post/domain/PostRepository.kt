@@ -16,4 +16,6 @@ interface PostRepository {
     ): Result<Post>
 
     suspend fun getLatestPendingPhoto(): Result<PendingPhotoPost?>
+
+    suspend fun discardPendingPhoto(pending: PendingPhotoPost): Result<Unit>
 }

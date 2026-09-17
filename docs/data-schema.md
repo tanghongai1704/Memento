@@ -44,6 +44,14 @@ Tạo postId/mediaId trước upload; giữ nguyên khi retry. Luồng đã tri�
 
 `disconnectDirect(connectionId)` chỉ áp dụng cho DIRECT và một trong hai member ACTIVE. Cùng transaction đổi connection sang `CLOSED`, xóa `memberIds`, chuyển cả hai member sang `LEFT` với `leftAt`, và đóng `directConnectionLocks/{directKey}`. Rules vì vậy thu hồi ngay quyền đọc connection/post/media. App cũng đổi membership local và xóa thư mục cache của connection; document lịch sử và Storage object vẫn được giữ cho chính sách cleanup bước 7. Kết nối lại tạo connection ID mới nên lịch sử cũ không tái xuất hiện.
 
+## Retry, offline và cleanup
+
+Draft upload hợp lệ nằm trong Room với `localSyncStatus = PENDING | FAILED`, giữ nguyên `postId`, `mediaId`, metadata và file JPEG riêng của app. Sau process death, Create Post khôi phục draft mới nhất và đưa người dùng thẳng tới `Resume pending upload`; retry ghi lại cùng Storage path rồi gọi finalize idempotent. Draft thiếu media hoặc file sai byte size được dọn local vì không thể retry. Người dùng có thể xác nhận discard; object đã upload nhưng chưa finalize được backend cleanup sau thời gian chờ.
+
+Splash chỉ dùng profile Room làm fallback khi Firebase báo lỗi mạng và Auth vẫn còn đúng UID; permission/data error không được che bằng cache. Feed/History tiếp tục được chặn bằng membership local của UID hiện tại.
+
+Scheduled Function `cleanupExpiredMedia` chạy mỗi ngày lúc 03:00 `Asia/Ho_Chi_Minh`. Nó chỉ nhận path chính xác `connections/{connectionId}/posts/{postId}/{mediaId}.jpg`; object phải cũ ít nhất 7 ngày. Orphan không có Post được xóa, hoặc media của Post `DELETED` chỉ được xóa khi `deletedAt` cũng đã qua 7 ngày và `mediaItems.storagePath` khớp. Bài ACTIVE, path ngoài phạm vi, media mới và Post metadata luôn được giữ.
+
 ## Room
 
 PostDao join posts/connections/membership theo current UID; filter All/connection/My/Received/type/time. Sắp xếp COALESCE(createdAt, clientCreatedAt) DESC. Lọc khoảng thời gian chỉ xét createdAt, như schema thảo luận. Composite PK (connectionId, postId) tránh giả định postId unique toàn cục. Các index posts(connectionId), posts(authorId), posts(createdAt), posts(status,createdAt), posts(connectionId,status,createdAt), connections(status), media_items(postId) có trong entities.

@@ -46,6 +46,9 @@ class PostRepositoryImpl @Inject constructor(
         caption: String?
     ): Result<PendingPhotoPost> = runCatching {
         val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
+        check(getLatestPendingPhoto().getOrThrow() == null) {
+            "Finish or discard the pending photo before creating another one."
+        }
         require(media.type == MediaType.IMAGE) { "MVP currently supports one photo per post." }
         val cleanCaption = caption?.trim()?.takeIf { it.isNotEmpty() }
         require((cleanCaption?.length ?: 0) <= 1000) { "Caption must be 1,000 characters or fewer." }
@@ -147,10 +150,26 @@ class PostRepositoryImpl @Inject constructor(
         val uid = auth.currentUser?.uid ?: return@runCatching null
         database.postDao().getRetryablePosts(uid).firstNotNullOfOrNull { entity ->
             val media = database.postDao().getMedia(entity.connectionId, entity.id).singleOrNull()
-                ?: return@firstNotNullOfOrNull null
-            val file = photoProcessor.outputFile(entity.connectionId, entity.id, media.mediaId)
-            if (!file.exists() || file.length() != media.sizeBytes) null
-            else PendingPhotoPost(entity.toDomain(listOf(media.toDomain())), file.toUri().toString())
+            val file = media?.let { photoProcessor.outputFile(entity.connectionId, entity.id, it.mediaId) }
+            if (media == null || file == null || !file.exists() || file.length() != media.sizeBytes) {
+                database.postDao().deleteLocalDraft(entity.connectionId, entity.id)
+                photoProcessor.outputFile(entity.connectionId, entity.id, "placeholder")
+                    .parentFile?.deleteRecursively()
+                null
+            } else {
+                PendingPhotoPost(entity.toDomain(listOf(media.toDomain())), file.toUri().toString())
+            }
+        }
+    }
+
+    override suspend fun discardPendingPhoto(pending: PendingPhotoPost): Result<Unit> = runCatching {
+        val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
+        check(pending.post.authorId == uid) { "This pending post belongs to another account." }
+        val deleted = database.postDao().deleteLocalDraft(pending.post.connectionId, pending.post.id)
+        check(deleted == 1) { "This post is no longer a local draft." }
+        pending.post.mediaItems.firstOrNull()?.let { media ->
+            photoProcessor.outputFile(pending.post.connectionId, pending.post.id, media.mediaId)
+                .parentFile?.deleteRecursively()
         }
     }
 
