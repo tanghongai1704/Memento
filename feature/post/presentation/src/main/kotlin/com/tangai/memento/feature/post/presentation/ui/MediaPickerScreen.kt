@@ -49,22 +49,20 @@ fun MediaPickerScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val singlePhotoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            val mediaType = MediaType.IMAGE
-            val originalSize = context.contentResolver.openAssetFileDescriptor(uri, "r")
-                ?.use { it.length.coerceAtLeast(0L) }
-                ?: 0L
-            viewModel.addSelectedMedia(
+    val photoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(5)
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            viewModel.setSelectedMedia(uris.mapIndexed { index, uri ->
+                val originalSize = context.contentResolver.openAssetFileDescriptor(uri, "r")
+                    ?.use { it.length.coerceAtLeast(0L) }
+                    ?: 0L
                 LocalMediaItem(
-                    uri = uri.toString(),
-                    type = mediaType,
-                    displayName = "photo_${System.currentTimeMillis()}",
+                    uri = uri.toString(), type = MediaType.IMAGE,
+                    displayName = "photo_${System.currentTimeMillis()}_$index",
                     originalSizeBytes = originalSize
                 )
-            )
+            })
         }
     }
 
@@ -82,7 +80,7 @@ fun MediaPickerScreen(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Select one photo",
+                text = "Select up to 5 photos",
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center,
@@ -92,17 +90,17 @@ fun MediaPickerScreen(
             )
 
             Button(
-                onClick = { singlePhotoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onClick = { photoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 modifier = Modifier.padding(8.dp)
             ) {
-                Text(if (uiState.selectedMedia.isEmpty()) "Choose photo" else "Choose another photo")
+                Text(if (uiState.selectedMedia.isEmpty()) "Choose photos" else "Change selection")
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             if (uiState.selectedMedia.isNotEmpty()) {
                 Text(
-                    text = "Selected photo",
+                    text = "${uiState.selectedMedia.size} photo(s) selected",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )

@@ -6,7 +6,7 @@ Chốt làm việc ngày 13/09/2026 cho lộ trình trong [mvp-progress](mvp-pro
 
 A đăng ký → tạo direct invite → B redeem → A đăng một ảnh → B xem được → mở lại app vẫn thấy lịch sử đã tải.
 
-MVP ưu tiên DIRECT, PHOTO, SINGLE. Có nhiều connection direct, mỗi cặp UID chỉ có tối đa một direct ACTIVE. GROUP, VIDEO, nhiều ảnh/layout và Recap triển khai sau khi luồng đầu tiên ổn. Username không unique; ghép đôi bằng invite, không dựa vào search để xác định một người duy nhất.
+MVP ưu tiên DIRECT và PHOTO. Luồng một ảnh/SINGLE đã ổn định trước, sau đó được mở rộng thành 1–5 ảnh với SINGLE, GRID, COLLAGE hoặc CAROUSEL. Có nhiều connection direct, mỗi cặp UID chỉ có tối đa một direct ACTIVE. GROUP, VIDEO và Recap triển khai sau. Username không unique; ghép đôi bằng invite, không dựa vào search để xác định một người duy nhất.
 
 ## Profile (bước 2)
 
@@ -34,8 +34,8 @@ MVP ưu tiên DIRECT, PHOTO, SINGLE. Có nhiều connection direct, mỗi cặp 
 
 | Thuộc tính | Quyết định |
 |---|---|
-| postType / layoutType | PHOTO / SINGLE |
-| Media mỗi post | Chính xác một ảnh |
+| postType / layoutType | PHOTO / SINGLE (1 ảnh), GRID/COLLAGE/CAROUSEL (2–5 ảnh) |
+| Media mỗi post | 1–5 ảnh, giữ thứ tự người dùng chọn |
 | Caption | Nullable, tối đa 1.000 ký tự |
 | File sau xử lý | JPEG, chất lượng khởi điểm 82 |
 | Kích thước sau resize | Cạnh dài tối đa 1.920 px, giữ tỉ lệ, không upscale |
@@ -44,7 +44,7 @@ MVP ưu tiên DIRECT, PHOTO, SINGLE. Có nhiều connection direct, mỗi cặp 
 | Storage path | `connections/{connectionId}/posts/{postId}/{mediaId}.jpg` |
 | Phân trang | 20 post/trang/connection; tiếp tục tải lịch sử cũ |
 
-Các ràng buộc đã được enforce ở app và phía Rules/backend. Metadata sizeBytes/width/height lấy từ file đã xử lý; cạnh dài tối đa 1.920 và byte size được kiểm tra lại trước khi backend publish Post. Bước 4 đã hoàn tất đường gửi; listener/pagination/download phía người nhận thuộc bước 5.
+Các ràng buộc đã được enforce ở app và phía backend. Metadata sizeBytes/width/height của từng ảnh lấy từ file đã xử lý; cạnh dài tối đa 1.920 và byte size được kiểm tra lại trước khi backend publish Post. Các ảnh được xử lý/upload tuần tự để giới hạn peak memory; UI hiển thị tiến độ tổng hợp.
 
 Video hiện chỉ tạo thumbnail và còn dùng số dung lượng ước lượng trong pipeline local; **chưa có nén video thật**. Không đưa VIDEO vào bản MVP đầu, không dùng con số ước lượng đó làm metadata remote.
 

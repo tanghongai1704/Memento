@@ -5,17 +5,17 @@ Tài liệu này mô tả lifecycle đầy đủ của một post ảnh trong co
 ## 1. Sơ đồ tổng quát
 
 ```text
-Chọn connection + ảnh
+Chọn connection + 1–5 ảnh
         ↓
 Giữ URI trong UI state
         ↓
 Tạo post local PENDING + sinh postId/mediaId
         ↓
-Đọc ảnh → sửa EXIF → resize → nén JPEG ≤ 5 MiB
+Lần lượt đọc ảnh → sửa EXIF → resize → nén mỗi JPEG ≤ 5 MiB
         ↓
 Lưu file private + metadata vào Room
         ↓
-Upload Firebase Storage
+Lần lượt upload các file lên Firebase Storage
         ↓
 Callable finalizePhotoPost xác minh file
         ↓
@@ -87,18 +87,19 @@ Nút `+` trong `MementoNavGraph` điều hướng tới `CreatePost`. Từ đây
 - `feature/post/presentation/.../ui/CreatePostScreen.kt`
 - `feature/post/presentation/.../viewmodel/CreatePostViewModel.kt` — khối `init`
 
-### 3.2 Chọn ảnh
+### 3.2 Chọn ảnh và layout
 
-`MediaPickerScreen` mở Android photo picker. Ảnh trả về được chuyển thành `LocalMediaItem` và đưa vào `CreatePostViewModel.addSelectedMedia()`.
+`MediaPickerScreen` mở Android photo picker với giới hạn 5 ảnh. Các URI trả về được chuyển thành `LocalMediaItem`, loại trùng theo URI và giữ nguyên thứ tự chọn.
 
-Hàm này:
+ViewModel:
 
 1. Bổ sung display name nếu thiếu.
-2. Ép type thành `IMAGE`.
-3. Giữ đúng một item bằng `selectedMedia = listOf(...)`.
-4. Xóa reference tới pending cũ trong UI state khi user chọn ảnh mới.
+2. Chỉ nhận tối đa 5 item IMAGE khác URI.
+3. Dùng SINGLE cho một ảnh và GRID mặc định khi có nhiều ảnh.
+4. Cho đổi giữa GRID, COLLAGE và CAROUSEL ở Preview.
+5. Xóa reference tới pending cũ trong UI state khi user chọn bộ ảnh mới.
 
-`MediaPreviewScreen` hiển thị ảnh, cho nhập caption hoặc bỏ ảnh đã chọn. Caption được giới hạn 1.000 ký tự ngay ở `onCaptionChanged()`.
+`MediaPreviewScreen` dùng chung `PhotoLayout` với Home/History, cho chọn layout, nhập caption hoặc bỏ bộ ảnh đã chọn. Caption được giới hạn 1.000 ký tự ngay ở `onCaptionChanged()`.
 
 Điểm đọc code:
 
@@ -121,7 +122,7 @@ Sau khi có `PendingPhotoPost`, ViewModel gọi `uploadPendingPhoto()` và cập
 
 ## 5. Chuẩn bị draft local
 
-Entry point: `PostRepositoryImpl.preparePhotoPost(connectionId, media, caption)`.
+Entry point: `PostRepositoryImpl.preparePhotoPost(connectionId, media, layoutType, caption, onProgress)`.
 
 ### 5.1 Validation trước khi xử lý
 
@@ -129,10 +130,11 @@ Repository kiểm tra:
 
 1. User vẫn đăng nhập.
 2. Không tồn tại draft PENDING/FAILED hợp lệ khác.
-3. Media là IMAGE.
-4. Caption sau khi trim không vượt quá 1.000 ký tự.
-5. Connection trong Room là ACTIVE.
-6. Membership của UID hiện tại trong connection là ACTIVE.
+3. Có 1–5 media và tất cả đều là IMAGE.
+4. Một ảnh bắt buộc SINGLE; nhiều ảnh bắt buộc GRID, COLLAGE hoặc CAROUSEL.
+5. Caption sau khi trim không vượt quá 1.000 ký tự.
+6. Connection trong Room là ACTIVE.
+7. Membership của UID hiện tại trong connection là ACTIVE.
 
 Nếu đang có draft, user phải đăng tiếp hoặc discard draft đó trước khi tạo post mới.
 
@@ -141,7 +143,7 @@ Nếu đang có draft, user phải đăng tiếp hoặc discard draft đó trư�
 Repository sinh:
 
 - `postId` bằng Firestore auto-ID;
-- `mediaId` bằng UUID;
+- mỗi ảnh có một `mediaId` bằng UUID;
 - `clientCreatedAt` bằng thời gian thiết bị.
 
 Những giá trị này được giữ nguyên trong toàn bộ vòng đời retry. Nhờ vậy retry không tạo thêm post hoặc Storage path mới.
@@ -151,7 +153,7 @@ Những giá trị này được giữ nguyên trong toàn bộ vòng đời ret
 Một `PostEntity` được lưu vào Room với:
 
 - `postType = PHOTO`;
-- `layoutType = SINGLE`;
+- `layoutType` đúng với số ảnh và lựa chọn ở Preview;
 - `status = ACTIVE`;
 - `localSyncStatus = PENDING`;
 - `createdAt/updatedAt = null` vì server chưa xác nhận.
@@ -165,7 +167,7 @@ Sau đó ảnh mới được xử lý. Nếu xử lý ảnh lỗi, record đư�
 
 ## 6. Xử lý ảnh local
 
-Entry point: `PhotoProcessor.process()`.
+Entry point: `PhotoProcessor.process()`, được repository gọi tuần tự trên `Dispatchers.IO` để không chặn UI và không giữ nhiều bitmap lớn trong bộ nhớ cùng lúc.
 
 Pipeline:
 
@@ -179,13 +181,13 @@ Pipeline:
 8. Nếu vẫn lớn, tiếp tục giảm kích thước bitmap còn 82% qua từng vòng và encode quality 74.
 9. Nếu cuối cùng vẫn vượt 5 MiB thì báo lỗi.
 
-File được lưu tại:
+Mỗi file được lưu tại:
 
 ```text
 <app files>/pending_media/{connectionId}/{postId}/{mediaId}.jpg
 ```
 
-Sau khi xử lý thành công, repository lưu `MediaItemEntity` gồm Storage path, kích thước ảnh và số byte thật. MIME persisted luôn là `image/jpeg`.
+Sau mỗi ảnh, repository cập nhật tiến độ tổng. Khi toàn bộ xử lý thành công, repository lưu danh sách `MediaItemEntity` gồm position, Storage path, kích thước ảnh và số byte thật. MIME persisted luôn là `image/jpeg`.
 
 Storage path tương ứng:
 
@@ -205,16 +207,16 @@ Entry point: `PostRepositoryImpl.uploadPendingPhoto()`.
 Trước khi upload, repository kiểm tra:
 
 1. Pending post thuộc đúng UID hiện tại.
-2. Post có đúng một media item.
-3. File local còn tồn tại.
-4. Kích thước file local đúng bằng `sizeBytes` đã persisted.
+2. Post có 1–5 media item và số local URI phải khớp.
+3. Mọi file local còn tồn tại.
+4. Kích thước từng file local đúng bằng `sizeBytes` đã persisted.
 
-Upload sử dụng đúng Storage path đã tạo khi prepare. Metadata gồm:
+Upload tuần tự theo `position`, dùng đúng Storage path đã tạo khi prepare. Metadata mỗi file gồm:
 
 - `contentType = image/jpeg`;
 - custom metadata `authorId = uid`.
 
-`awaitUpload()` chuyển Firebase progress thành `Float` từ 0 đến 1 để ViewModel hiển thị tiến độ. Nếu coroutine bị cancel, upload task cũng bị cancel.
+`awaitUpload()` chuyển progress của từng file thành progress tổng từ 0 đến 1 để ViewModel hiển thị. Mỗi file có timeout riêng; nếu coroutine bị cancel, upload task đang chạy cũng bị cancel.
 
 Điểm đọc code:
 
@@ -225,16 +227,11 @@ Upload sử dụng đúng Storage path đã tạo khi prepare. Metadata gồm:
 
 Upload Storage thành công chưa có nghĩa là post đã được publish. Android phải gọi Callable `finalizePhotoPost`.
 
-Payload gồm:
-
-- connection/post/media ID;
-- `clientCreatedAt` và caption;
-- Storage path;
-- MIME, width, height và size.
+Payload gồm connection/post ID, `clientCreatedAt`, caption, layout và danh sách media có media ID, Storage path, MIME, width, height, size, position.
 
 ### 8.1 Validate request
 
-`functions/src/postCore.ts::parseFinalizePhotoInput()` kiểm tra kiểu dữ liệu, ID/path, caption và các giới hạn như 5 MiB, cạnh tối đa 1.920 px.
+`functions/src/postCore.ts::parseFinalizePhotoInput()` kiểm tra kiểu dữ liệu, ID/path, caption, layout, thứ tự liên tục và giới hạn 1–5 ảnh như 5 MiB/file, cạnh tối đa 1.920 px. Parser vẫn nhận payload một ảnh kiểu cũ để retry draft tạo trước khi nâng cấp.
 
 ### 8.2 Xác minh object Storage
 
@@ -257,7 +254,7 @@ Client không thể chỉ gửi metadata giả để tạo post không có file 
 Nếu post chưa tồn tại, backend yêu cầu connection ACTIVE, UID nằm trong `memberIds` và membership ACTIVE. Sau đó transaction:
 
 1. Tạo `connections/{connectionId}/posts/{postId}`.
-2. Ghi một media item PHOTO/SINGLE.
+2. Ghi danh sách 1–5 media item theo đúng position và layout.
 3. Ghi timestamp server và `status = ACTIVE`.
 4. Cập nhật `connection.lastPostAt` và `updatedAt`.
 
@@ -273,9 +270,9 @@ Nếu post chưa tồn tại, backend yêu cầu connection ACTIVE, UID nằm tr
 Retry sử dụng lại hoàn toàn:
 
 - `postId`;
-- `mediaId`;
-- Storage path;
-- file JPEG đã xử lý;
+- toàn bộ `mediaId` theo position;
+- toàn bộ Storage path;
+- các file JPEG đã xử lý;
 - caption và `clientCreatedAt` đã persisted.
 
 Nếu lần gọi trước đã tạo Firestore post nhưng response về điện thoại bị mất, lần retry sẽ gặp post đã tồn tại. Backend so sánh toàn bộ field quan trọng:
@@ -322,7 +319,7 @@ Repository lấy các post của UID có `localSyncStatus IN ('PENDING', 'FAILED
 
 1. Lấy media item tương ứng.
 2. Dựng lại đường dẫn file bằng `PhotoProcessor.outputFile()`.
-3. Kiểm tra có đúng một media, file tồn tại và size đúng.
+3. Kiểm tra có 1–5 media, đủ mọi file và size từng file đúng.
 4. Nếu hợp lệ, trả `PendingPhotoPost` cho UI.
 5. Nếu không hợp lệ, xóa draft Room và cả thư mục file hỏng rồi xét draft tiếp theo.
 

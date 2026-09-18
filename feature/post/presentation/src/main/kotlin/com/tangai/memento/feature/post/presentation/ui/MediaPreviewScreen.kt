@@ -1,8 +1,5 @@
 package com.tangai.memento.feature.post.presentation.ui
 
-import android.content.Context
-import android.net.Uri
-import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.imePadding
@@ -14,12 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -31,9 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,7 +31,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.domain.model.MediaType
 import com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel
 import java.util.Locale
-import coil3.compose.AsyncImage
+import com.tangai.memento.domain.model.LayoutType
+import com.tangai.memento.ui.PhotoLayout
 
 @Composable
 fun MediaPreviewScreen(
@@ -94,48 +85,41 @@ fun MediaPreviewScreen(
                     .padding(bottom = 16.dp),
             )
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp)
-                    .padding(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (previewMedia != null) {
-                        AsyncImage(
-                            model = previewMedia.thumbnailUri ?: previewMedia.uri,
-                            contentDescription = previewMedia?.displayName ?: "Media preview",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Text(
-                            text = "No media selected",
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(16.dp)
-                        )
+            PhotoLayout(
+                media = uiState.selectedMedia.map { it.thumbnailUri ?: it.uri },
+                layoutType = uiState.selectedLayout,
+                contentDescription = "Media preview",
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                height = 320.dp
+            )
+
+            if (uiState.selectedMedia.size > 1 && uiState.pendingPhoto == null) {
+                Text("Layout", style = MaterialTheme.typography.titleSmall)
+                Row {
+                    listOf(LayoutType.GRID, LayoutType.COLLAGE, LayoutType.CAROUSEL).forEach { layout ->
+                        Button(
+                            onClick = { viewModel.onLayoutSelected(layout) },
+                            enabled = uiState.selectedLayout != layout,
+                            modifier = Modifier.padding(4.dp)
+                        ) { Text(layout.name.lowercase().replaceFirstChar(Char::uppercase)) }
                     }
                 }
             }
 
             if (previewMedia != null) {
                 Text(
-                    text = "Photo · ready to post",
+                    text = "${uiState.selectedMedia.size} photo(s) · ready to post",
                     fontSize = 16.sp,
                     modifier = Modifier.padding(top = 8.dp)
                 )
-                val originalSize = previewMedia.originalSizeBytes
-                val processedSize = previewMedia.processedSizeBytes
+                val originalSize = uiState.selectedMedia.sumOf { it.originalSizeBytes }
+                val processedSize = uiState.selectedMedia.sumOf { it.processedSizeBytes }
                 if (processedSize > 0L) {
                     Text(
                         text = if (originalSize > 0L) {
                             "${formatBytes(originalSize)} → ${formatBytes(processedSize)} " +
-                                "(${((1f - previewMedia.compressionRatio).coerceIn(0f, 1f) * 100).toInt()}% smaller)"
+                                "(${((1f - processedSize.toFloat() / originalSize.toFloat())
+                                    .coerceIn(0f, 1f) * 100).toInt()}% smaller)"
                         } else {
                             "Compressed size: ${formatBytes(processedSize)}"
                         },
@@ -186,7 +170,8 @@ fun MediaPreviewScreen(
                     Button(
                         onClick = {
                             if (uiState.pendingPhoto == null) {
-                                viewModel.removeSelectedMedia(previewMedia?.uri ?: "")
+                                viewModel.clearSelectedMedia()
+                                onNavigateBack()
                             } else {
                                 confirmDiscard = true
                             }
@@ -194,7 +179,7 @@ fun MediaPreviewScreen(
                         enabled = previewMedia != null,
                         modifier = Modifier.padding(8.dp)
                     ) {
-                        Text(if (uiState.pendingPhoto == null) "Remove" else "Discard draft")
+                        Text(if (uiState.pendingPhoto == null) "Change photos" else "Discard draft")
                     }
 
                     Button(
@@ -205,7 +190,7 @@ fun MediaPreviewScreen(
                         },
                         modifier = Modifier.padding(8.dp)
                     ) {
-                        Text(if (uiState.pendingPhoto == null) "Post photo" else "Retry upload")
+                        Text(if (uiState.pendingPhoto == null) "Post photos" else "Retry upload")
                     }
                 }
             }

@@ -31,6 +31,8 @@ import com.tangai.memento.feature.post.domain.PostRepository
 import com.tangai.memento.network.NetworkStatusProvider
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.util.UUID
@@ -49,14 +51,22 @@ class PostRepositoryImpl @Inject constructor(
 ) : PostRepository {
     override suspend fun preparePhotoPost(
         connectionId: String,
-        media: LocalMediaItem,
-        caption: String?
-    ): Result<PendingPhotoPost> = runCatching {
+        media: List<LocalMediaItem>,
+        layoutType: LayoutType,
+        caption: String?,
+        onProgress: (Float) -> Unit
+    ): Result<PendingPhotoPost> = withContext(Dispatchers.IO) { runCatching {
         val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
         check(getLatestPendingPhoto().getOrThrow() == null) {
             "Finish or discard the pending photo before creating another one."
         }
-        require(media.type == MediaType.IMAGE) { "MVP currently supports one photo per post." }
+        require(media.size in 1..MAX_PHOTOS_PER_POST && media.all { it.type == MediaType.IMAGE }) {
+            "Choose between 1 and $MAX_PHOTOS_PER_POST photos."
+        }
+        require((media.size == 1 && layoutType == LayoutType.SINGLE) ||
+            (media.size > 1 && layoutType != LayoutType.SINGLE)) {
+            "Choose a multi-photo layout when posting more than one photo."
+        }
         val cleanCaption = caption?.trim()?.takeIf { it.isNotEmpty() }
         require((cleanCaption?.length ?: 0) <= 1000) { "Caption must be 1,000 characters or fewer." }
         val connection = database.connectionDao().getConnectionById(connectionId)
@@ -67,11 +77,10 @@ class PostRepositoryImpl @Inject constructor(
 
         val postId = firestore.collection("connections").document(connectionId)
             .collection("posts").document().id
-        val mediaId = UUID.randomUUID().toString()
         val clientCreatedAt = System.currentTimeMillis()
         val pendingEntity = PostEntity(
             id = postId, connectionId = connectionId, authorId = uid,
-            postType = PostType.PHOTO, layoutType = LayoutType.SINGLE, caption = cleanCaption,
+            postType = PostType.PHOTO, layoutType = layoutType, caption = cleanCaption,
             clientCreatedAt = clientCreatedAt, createdAt = null, updatedAt = null,
             status = PostStatus.ACTIVE, deletedAt = null, deletedBy = null,
             schemaVersion = 1, localSyncStatus = LocalSyncStatus.PENDING
@@ -79,24 +88,30 @@ class PostRepositoryImpl @Inject constructor(
         database.postDao().upsertPost(pendingEntity)
 
         try {
-            val processed = photoProcessor.process(media.uri, connectionId, postId, mediaId)
-            val storagePath = storagePath(connectionId, postId, mediaId)
-            val mediaEntity = MediaItemEntity(
-                connectionId = connectionId, postId = postId, mediaId = mediaId,
-                mediaType = MediaType.IMAGE, storagePath = storagePath, thumbnailPath = null,
-                mimeType = "image/jpeg", width = processed.width, height = processed.height,
-                durationMs = null, sizeBytes = processed.sizeBytes, position = 0
-            )
-            database.postDao().upsertMedia(listOf(mediaEntity))
+            val processedMedia = media.mapIndexed { position, item ->
+                val mediaId = UUID.randomUUID().toString()
+                val processed = photoProcessor.process(item.uri, connectionId, postId, mediaId)
+                onProgress((position + 1).toFloat() / media.size.toFloat())
+                MediaItemEntity(
+                    connectionId = connectionId, postId = postId, mediaId = mediaId,
+                    mediaType = MediaType.IMAGE,
+                    storagePath = storagePath(connectionId, postId, mediaId),
+                    thumbnailPath = null, mimeType = "image/jpeg",
+                    width = processed.width, height = processed.height,
+                    durationMs = null, sizeBytes = processed.sizeBytes, position = position
+                ) to processed.file.toUri().toString()
+            }
+            val mediaEntities = processedMedia.map { it.first }
+            database.postDao().upsertMedia(mediaEntities)
             PendingPhotoPost(
-                post = pendingEntity.toDomain(listOf(mediaEntity.toDomain())),
-                localUri = processed.file.toUri().toString()
+                post = pendingEntity.toDomain(mediaEntities.map { it.toDomain() }),
+                localUris = processedMedia.map { it.second }
             )
         } catch (error: Throwable) {
             database.postDao().updateSyncState(connectionId, postId, LocalSyncStatus.FAILED)
             throw error
         }
-    }
+    } }
 
     override suspend fun uploadPendingPhoto(
         pending: PendingPhotoPost,
@@ -105,10 +120,12 @@ class PostRepositoryImpl @Inject constructor(
         val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
         val post = pending.post
         check(post.authorId == uid) { "This pending post belongs to another account." }
-        val media = post.mediaItems.singleOrNull()
-            ?: error("A photo post must contain exactly one media item.")
-        val localFile = File(requireNotNull(Uri.parse(pending.localUri).path))
-        check(localFile.exists() && localFile.length() == media.sizeBytes) {
+        val media = post.mediaItems.sortedBy { it.position }
+        check(media.size in 1..MAX_PHOTOS_PER_POST && pending.localUris.size == media.size) {
+            "A photo post contains an invalid number of media items."
+        }
+        val localFiles = pending.localUris.map { File(requireNotNull(Uri.parse(it).path)) }
+        check(localFiles.zip(media).all { (file, item) -> file.exists() && file.length() == item.sizeBytes }) {
             "The processed photo is missing. Please select it again."
         }
         check(networkStatusProvider.isOnline()) {
@@ -120,23 +137,33 @@ class PostRepositoryImpl @Inject constructor(
                 .setContentType("image/jpeg")
                 .setCustomMetadata("authorId", uid)
                 .build()
-            withTimeout(UPLOAD_TIMEOUT_MS) {
-                storage.reference.child(media.storagePath)
-                    .putFile(localFile.toUri(), metadata)
-                    .awaitUpload(onProgress)
+            media.zip(localFiles).forEachIndexed { index, (item, file) ->
+                withTimeout(UPLOAD_TIMEOUT_MS) {
+                    storage.reference.child(item.storagePath)
+                        .putFile(file.toUri(), metadata)
+                        .awaitUpload { itemProgress ->
+                            onProgress((index + itemProgress) / media.size.toFloat())
+                        }
+                }
             }
             val response = withTimeout(FINALIZE_TIMEOUT_MS) {
                 functions.getHttpsCallable("finalizePhotoPost").call(mapOf(
                     "connectionId" to post.connectionId,
                     "postId" to post.id,
-                    "mediaId" to media.mediaId,
                     "clientCreatedAt" to post.clientCreatedAt,
                     "caption" to post.caption,
-                    "storagePath" to media.storagePath,
-                    "mimeType" to media.mimeType,
-                    "width" to media.width,
-                    "height" to media.height,
-                    "sizeBytes" to media.sizeBytes
+                    "layoutType" to post.layoutType.name,
+                    "mediaItems" to media.map { item ->
+                        mapOf(
+                            "mediaId" to item.mediaId,
+                            "storagePath" to item.storagePath,
+                            "mimeType" to item.mimeType,
+                            "width" to item.width,
+                            "height" to item.height,
+                            "sizeBytes" to item.sizeBytes,
+                            "position" to item.position
+                        )
+                    }
                 )).awaitTask().data as? Map<*, *> ?: error("Unexpected publish response.")
             }
             val createdAt = (response["createdAtMillis"] as? Number)?.toLong()
@@ -163,15 +190,19 @@ class PostRepositoryImpl @Inject constructor(
     override suspend fun getLatestPendingPhoto(): Result<PendingPhotoPost?> = runCatching {
         val uid = auth.currentUser?.uid ?: return@runCatching null
         database.postDao().getRetryablePosts(uid).firstNotNullOfOrNull { entity ->
-            val media = database.postDao().getMedia(entity.connectionId, entity.id).singleOrNull()
-            val file = media?.let { photoProcessor.outputFile(entity.connectionId, entity.id, it.mediaId) }
-            if (media == null || file == null || !file.exists() || file.length() != media.sizeBytes) {
+            val media = database.postDao().getMedia(entity.connectionId, entity.id).sortedBy { it.position }
+            val files = media.map { photoProcessor.outputFile(entity.connectionId, entity.id, it.mediaId) }
+            if (media.isEmpty() || media.size > MAX_PHOTOS_PER_POST ||
+                files.zip(media).any { (file, item) -> !file.exists() || file.length() != item.sizeBytes }) {
                 database.postDao().deleteLocalDraft(entity.connectionId, entity.id)
                 photoProcessor.outputFile(entity.connectionId, entity.id, "placeholder")
                     .parentFile?.deleteRecursively()
                 null
             } else {
-                PendingPhotoPost(entity.toDomain(listOf(media.toDomain())), file.toUri().toString())
+                PendingPhotoPost(
+                    entity.toDomain(media.map { it.toDomain() }),
+                    files.map { it.toUri().toString() }
+                )
             }
         }
     }
@@ -191,6 +222,7 @@ class PostRepositoryImpl @Inject constructor(
         "connections/$connectionId/posts/$postId/$mediaId.jpg"
 
     private companion object {
+        const val MAX_PHOTOS_PER_POST = 5
         const val UPLOAD_TIMEOUT_MS = 2 * 60 * 1000L
         const val FINALIZE_TIMEOUT_MS = 30 * 1000L
     }
@@ -198,24 +230,24 @@ class PostRepositoryImpl @Inject constructor(
 
 private fun Throwable.asUploadError(): Throwable = when (this) {
     is TimeoutCancellationException -> IllegalStateException(
-        "The upload timed out. Your photo is saved; check the connection and tap Retry upload.",
+            "The upload timed out. Your photos are saved; check the connection and tap Retry upload.",
         this
     )
     is FirebaseNetworkException -> IllegalStateException(
-        "The network connection was lost. Your photo is saved; reconnect and tap Retry upload.",
+            "The network connection was lost. Your photos are saved; reconnect and tap Retry upload.",
         this
     )
     is FirebaseFunctionsException -> when (code) {
         FirebaseFunctionsException.Code.UNAVAILABLE,
         FirebaseFunctionsException.Code.DEADLINE_EXCEEDED -> IllegalStateException(
-            "The server could not be reached. Your photo is saved; tap Retry upload in a moment.",
+            "The server could not be reached. Your photos are saved; tap Retry upload in a moment.",
             this
         )
         else -> this
     }
     is StorageException -> when (errorCode) {
         StorageException.ERROR_RETRY_LIMIT_EXCEEDED -> IllegalStateException(
-            "The upload could not finish on this connection. Your photo is saved; tap Retry upload.",
+            "The upload could not finish on this connection. Your photos are saved; tap Retry upload.",
             this
         )
         else -> this

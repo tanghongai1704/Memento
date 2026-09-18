@@ -2,6 +2,7 @@ package com.tangai.memento.feature.post.presentation.viewmodel
 
 import com.tangai.memento.domain.model.LocalMediaItem
 import com.tangai.memento.domain.model.Connection
+import com.tangai.memento.domain.model.LayoutType
 import com.tangai.memento.feature.post.domain.PendingPhotoPost
 
 data class CreatePostUiState(
@@ -9,6 +10,7 @@ data class CreatePostUiState(
     val recipientLabels: Map<String, String> = emptyMap(),
     val selectedRecipient: Connection? = null,
     val selectedMedia: List<LocalMediaItem> = emptyList(),
+    val selectedLayout: LayoutType = LayoutType.SINGLE,
     val caption: String = "",
     val pendingPhoto: PendingPhotoPost? = null,
     val isLoading: Boolean = false,

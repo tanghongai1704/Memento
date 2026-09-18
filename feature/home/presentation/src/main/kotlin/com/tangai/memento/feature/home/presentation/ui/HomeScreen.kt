@@ -43,7 +43,7 @@ import com.tangai.memento.domain.model.Post
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.presentation.viewmodel.HomeViewModel
 import java.io.File
-import coil3.compose.AsyncImage
+import com.tangai.memento.ui.PhotoLayout
 
 @Composable
 fun HomeScreen(
@@ -251,15 +251,11 @@ fun PostCard(
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
-    val media = post.mediaItems.firstOrNull()
-    val localFile = media?.let {
+    val cachedMedia = post.mediaItems.sortedBy { it.position }.map { media ->
         File(
             context.filesDir,
-            "pending_media/${post.connectionId}/${post.id}/${it.mediaId}.jpg",
-        )
-    }
-    val cachedFile = remember(post.id, post.connectionId, media?.mediaId, mediaCacheRevision, localFile?.lastModified()) {
-        localFile?.takeIf(File::exists)
+            "pending_media/${post.connectionId}/${post.id}/${media.mediaId}.jpg",
+        ).takeIf(File::exists)
     }
     Card(
         modifier = Modifier
@@ -305,36 +301,12 @@ fun PostCard(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            if (cachedFile != null) {
-                AsyncImage(
-                    model = cachedFile,
-                    contentDescription = post.caption ?: "Shared photo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            shape = RoundedCornerShape(20.dp)
-                        )
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            shape = RoundedCornerShape(20.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Photo is not available in the local cache yet.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+            PhotoLayout(
+                media = cachedMedia,
+                layoutType = post.layoutType,
+                contentDescription = post.caption ?: "Shared photo",
+                modifier = Modifier.fillMaxWidth()
+            )
             post.caption?.let {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(it, style = MaterialTheme.typography.bodyMedium)

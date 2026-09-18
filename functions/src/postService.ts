@@ -1,15 +1,14 @@
 import {Firestore, Timestamp} from "firebase-admin/firestore";
-import {FinalizePhotoInput} from "./postCore";
+import {FinalizePhotoInput, PhotoMediaInput} from "./postCore";
 import {
   ConnectionStatus,
-  LayoutType,
   MediaType,
   MemberStatus,
   PostStatus,
   PostType,
 } from "./schema";
 
-export type MediaVerifier = (input: FinalizePhotoInput) => Promise<boolean>;
+export type MediaVerifier = (input: PhotoMediaInput) => Promise<boolean>;
 
 export type FinalizePhotoResult =
   | {ok: true; createdAtMillis: number; updatedAtMillis: number}
@@ -22,7 +21,8 @@ export async function finalizePhotoPost(
   verifyMedia: MediaVerifier,
   now = Timestamp.now(),
 ): Promise<FinalizePhotoResult> {
-  if (!await verifyMedia(input)) return {ok: false, reason: "MEDIA_INVALID"};
+  const verified = await Promise.all(input.mediaItems.map(verifyMedia));
+  if (verified.some((valid) => !valid)) return {ok: false, reason: "MEDIA_INVALID"};
 
   const connectionRef = db.collection("connections").doc(input.connectionId);
   const memberRef = connectionRef.collection("members").doc(uid);
@@ -37,24 +37,27 @@ export async function finalizePhotoPost(
 
     if (existingPost.exists) {
       const mediaItems = existingPost.get("mediaItems");
-      const media = Array.isArray(mediaItems) && mediaItems.length === 1 ? mediaItems[0] : null;
+      const sameMedia = Array.isArray(mediaItems) && mediaItems.length === input.mediaItems.length &&
+        input.mediaItems.every((expected, index) => {
+          const media = mediaItems[index];
+          return media?.mediaId === expected.mediaId &&
+            media?.mediaType === MediaType.IMAGE &&
+            media?.storagePath === expected.storagePath &&
+            media?.thumbnailPath === null &&
+            media?.mimeType === expected.mimeType &&
+            media?.width === expected.width &&
+            media?.height === expected.height &&
+            media?.durationMs === null &&
+            media?.sizeBytes === expected.sizeBytes &&
+            media?.position === expected.position;
+        });
       const samePost = existingPost.get("authorId") === uid &&
         existingPost.get("connectionId") === input.connectionId &&
         existingPost.get("postType") === PostType.PHOTO &&
-        existingPost.get("layoutType") === LayoutType.SINGLE &&
+        existingPost.get("layoutType") === input.layoutType &&
         existingPost.get("caption") === input.caption &&
         existingPost.get("clientCreatedAt") === input.clientCreatedAt &&
-        existingPost.get("status") === PostStatus.ACTIVE &&
-        media?.mediaId === input.mediaId &&
-        media?.mediaType === MediaType.IMAGE &&
-        media?.storagePath === input.storagePath &&
-        media?.thumbnailPath === null &&
-        media?.mimeType === input.mimeType &&
-        media?.width === input.width &&
-        media?.height === input.height &&
-        media?.durationMs === null &&
-        media?.sizeBytes === input.sizeBytes &&
-        media?.position === 0;
+        existingPost.get("status") === PostStatus.ACTIVE && sameMedia;
       if (!samePost) return {ok: false, reason: "POST_CONFLICT"};
       const createdAt = existingPost.get("createdAt") as Timestamp;
       const updatedAt = existingPost.get("updatedAt") as Timestamp;
@@ -72,20 +75,20 @@ export async function finalizePhotoPost(
       connectionId: input.connectionId,
       authorId: uid,
       postType: PostType.PHOTO,
-      layoutType: LayoutType.SINGLE,
+      layoutType: input.layoutType,
       caption: input.caption,
-      mediaItems: [{
-        mediaId: input.mediaId,
+      mediaItems: input.mediaItems.map((media) => ({
+        mediaId: media.mediaId,
         mediaType: MediaType.IMAGE,
-        storagePath: input.storagePath,
+        storagePath: media.storagePath,
         thumbnailPath: null,
-        mimeType: input.mimeType,
-        width: input.width,
-        height: input.height,
+        mimeType: media.mimeType,
+        width: media.width,
+        height: media.height,
         durationMs: null,
-        sizeBytes: input.sizeBytes,
-        position: 0,
-      }],
+        sizeBytes: media.sizeBytes,
+        position: media.position,
+      })),
       clientCreatedAt: input.clientCreatedAt,
       createdAt: now,
       updatedAt: now,

@@ -303,8 +303,8 @@ fun MementoNavGraph() {
                     )
                 }
 
-                composable(MementoRoute.MediaPicker.route) {
-                    val parentEntry = remember(navController) {
+                composable(MementoRoute.MediaPicker.route) { backStackEntry ->
+                    val parentEntry = remember(backStackEntry) {
                         navController.getBackStackEntry(MementoRoute.CreatePost.route)
                     }
                     val createPostViewModel: com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel = hiltViewModel(parentEntry)
@@ -319,8 +319,8 @@ fun MementoNavGraph() {
                     )
                 }
 
-                composable(MementoRoute.MediaPreview.route) {
-                    val parentEntry = remember(navController) {
+                composable(MementoRoute.MediaPreview.route) { backStackEntry ->
+                    val parentEntry = remember(backStackEntry) {
                         navController.getBackStackEntry(MementoRoute.CreatePost.route)
                     }
                     val createPostViewModel: com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel = hiltViewModel(parentEntry)

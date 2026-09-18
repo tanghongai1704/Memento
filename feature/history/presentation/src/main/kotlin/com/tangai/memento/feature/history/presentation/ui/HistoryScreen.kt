@@ -29,7 +29,7 @@ import com.tangai.memento.ui.UiState
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
-import coil3.compose.AsyncImage
+import com.tangai.memento.ui.PhotoLayout
 
 @Composable
 fun HistoryScreen(
@@ -140,12 +140,9 @@ fun HistoryScreen(
 @Composable
 private fun HistoryMomentCard(post: Post) {
     val context = LocalContext.current
-    val media = post.mediaItems.firstOrNull()
-    val localFile = media?.let {
-        File(context.filesDir, "pending_media/${post.connectionId}/${post.id}/${it.mediaId}.jpg")
-    }
-    val cachedFile = remember(localFile?.absolutePath, localFile?.lastModified()) {
-        localFile?.takeIf(File::exists)
+    val cachedMedia = post.mediaItems.sortedBy { it.position }.map { media ->
+        File(context.filesDir, "pending_media/${post.connectionId}/${post.id}/${media.mediaId}.jpg")
+            .takeIf(File::exists)
     }
     val sharedAt = post.createdAt ?: post.clientCreatedAt
 
@@ -157,22 +154,12 @@ private fun HistoryMomentCard(post: Post) {
         )
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-            if (cachedFile != null) {
-                AsyncImage(
-                    model = cachedFile,
-                    contentDescription = post.caption ?: "Shared photo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(14.dp))
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(120.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Photo unavailable offline", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            PhotoLayout(
+                media = cachedMedia,
+                layoutType = post.layoutType,
+                contentDescription = post.caption ?: "Shared photo",
+                height = 180.dp
+            )
             Spacer(modifier = Modifier.height(10.dp))
             post.caption?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
             Text(

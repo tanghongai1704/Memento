@@ -266,3 +266,26 @@ Chạy checklist toàn hành trình trên hai thiết bị: tạo/redeem, gửi/
 ### Chốt bước 8
 
 Hành trình MVP đã đạt trên hai sandbox người dùng độc lập, gồm quyền Photo Picker, realtime listener, pagination, process-death recovery và vòng đời delete/disconnect/reconnect. Trước khi phát hành rộng vẫn nên smoke-test thêm trên hai thiết bị vật lý khác phiên bản Android và mạng thật; đây là release check, không phải phần logic MVP còn thiếu.
+
+## 18/09/2026 — mở rộng 1–5 ảnh và layout động (đang ở branch, chưa commit)
+
+### Đã làm
+
+- Photo Picker nhận tối đa 5 ảnh; Preview chọn GRID, COLLAGE hoặc CAROUSEL, còn một ảnh luôn dùng SINGLE.
+- Preview, Home và History dùng chung `PhotoLayout`; backend nhận `mediaItems[]`, kiểm tra 1–5 ảnh, position liên tục và vẫn tương thích payload một ảnh cũ.
+- Resize/nén và upload chạy tuần tự theo position để giới hạn peak memory. Xử lý ảnh chạy trên luồng I/O, UI nhận tiến độ sau từng ảnh; upload có tiến độ tổng và timeout riêng cho từng file.
+- Draft Room giữ toàn bộ media và layout để retry sau khi tắt app; server finalize vẫn idempotent với cả danh sách media.
+- Sáu Cloud Functions đã deploy thành công lên `memento-fre`; `finalizePhotoPost` mới đang ACTIVE.
+
+### Bằng chứng hiện tại
+
+- 13 Functions unit tests đạt, gồm multi-photo validation và tương thích payload cũ; 5 schema checks đạt.
+- Android debug build và lint đạt trên bản source hiện tại; sau bổ sung tiến độ xử lý, hai module post compile lại thành công.
+- APK cài và mở được trên Pixel 9 emulator, không có crash AndroidRuntime.
+- Tài khoản đang đăng nhập hiện không có connection ACTIVE, nên kiểm thử UI production dừng đúng ở “No connections yet”; chưa tạo dữ liệu/kết nối thật chỉ để test.
+
+### Còn lại trước khi chốt nhánh
+
+- Chạy UI end-to-end 2–5 ảnh trên Firebase Emulator hoặc hai tài khoản test có connection: kiểm tra ba layout, progress, retry và ảnh xuất hiện đúng thứ tự ở thiết bị nhận.
+- Chưa triển khai video upload/nén/thumbnail. Đây là hạng mục tiếp theo nhưng dài và rủi ro hơn multi-photo.
+- Các thay đổi trong mục này chủ ý chưa commit theo yêu cầu giữ một version ổn định để quay lại.

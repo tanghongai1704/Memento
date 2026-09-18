@@ -4,5 +4,5 @@ import com.tangai.memento.domain.model.Post
 
 data class PendingPhotoPost(
     val post: Post,
-    val localUri: String
+    val localUris: List<String>
 )

@@ -49,7 +49,7 @@ fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Connections",
+                    text = "Connection",
                     style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.primary,
                     textAlign = TextAlign.Center,

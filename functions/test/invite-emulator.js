@@ -42,10 +42,13 @@ async function main() {
   assert.equal((await db.collection("connections").get()).size, 2);
   assert.equal((await redeemDirectInvite(db, "redeemer-e", "AAAA-AAAA")).reason, "INVALID_INVITE");
   const photoInput = {
-    connectionId: connection.id, postId: "post-photo", mediaId: "media-photo",
-    clientCreatedAt: 123456789, caption: "MVP photo",
-    storagePath: `connections/${connection.id}/posts/post-photo/media-photo.jpg`,
-    mimeType: "image/jpeg", width: 1920, height: 1080, sizeBytes: 2048,
+    connectionId: connection.id, postId: "post-photo",
+    clientCreatedAt: 123456789, caption: "MVP photo", layoutType: "SINGLE",
+    mediaItems: [{
+      mediaId: "media-photo",
+      storagePath: `connections/${connection.id}/posts/post-photo/media-photo.jpg`,
+      mimeType: "image/jpeg", width: 1920, height: 1080, sizeBytes: 2048, position: 0,
+    }],
   };
   const published = await finalizePhotoPost(db, "creator-a", photoInput, async () => true);
   assert.equal(published.ok, true);
@@ -61,13 +64,11 @@ async function main() {
   );
   assert.equal(conflictingRetry.reason, "POST_CONFLICT");
   const rejectedMember = await finalizePhotoPost(
-    db, "redeemer-e", {...photoInput, postId: "not-member", storagePath:
-      `connections/${connection.id}/posts/not-member/media-photo.jpg`}, async () => true,
+    db, "redeemer-e", {...photoInput, postId: "not-member"}, async () => true,
   );
   assert.equal(rejectedMember.reason, "NOT_ACTIVE_MEMBER");
   const rejectedMedia = await finalizePhotoPost(
-    db, "creator-a", {...photoInput, postId: "bad-media", storagePath:
-      `connections/${connection.id}/posts/bad-media/media-photo.jpg`}, async () => false,
+    db, "creator-a", {...photoInput, postId: "bad-media"}, async () => false,
   );
   assert.equal(rejectedMedia.reason, "MEDIA_INVALID");
   const rejectedDelete = await softDeletePost(db, "redeemer-b", {
@@ -93,8 +94,7 @@ async function main() {
   closedMembers.docs.forEach((member) => assert.equal(member.get("status"), "LEFT"));
   assert.equal((await disconnectDirect(db, "creator-a", {connectionId: connection.id})).ok, true);
   const rejectedAfterDisconnect = await finalizePhotoPost(
-    db, "creator-a", {...photoInput, postId: "after-disconnect", storagePath:
-      `connections/${connection.id}/posts/after-disconnect/media-photo.jpg`}, async () => true,
+    db, "creator-a", {...photoInput, postId: "after-disconnect"}, async () => true,
   );
   assert.equal(rejectedAfterDisconnect.reason, "NOT_ACTIVE_MEMBER");
   const reconnected = await redeemDirectInvite(db, "redeemer-b", created.code);

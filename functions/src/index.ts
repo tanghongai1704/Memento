@@ -61,9 +61,9 @@ export const finalizePhotoPost = onCall(callableOptions, async (request) => {
   if (!input) throw new HttpsError("invalid-argument", "Invalid photo post data.");
   let result;
   try {
-    result = await finalizePhotoPostService(db, uid, input, async (photo) => {
-      const [metadata] = await getStorage().bucket().file(photo.storagePath).getMetadata();
-      return metadata.contentType === "image/jpeg" && Number(metadata.size) === photo.sizeBytes &&
+    result = await finalizePhotoPostService(db, uid, input, async (media) => {
+      const [metadata] = await getStorage().bucket().file(media.storagePath).getMetadata();
+      return metadata.contentType === "image/jpeg" && Number(metadata.size) === media.sizeBytes &&
         metadata.metadata?.authorId === uid;
     });
   } catch (error) {
