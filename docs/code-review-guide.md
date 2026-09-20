@@ -1,6 +1,6 @@
 # Hướng dẫn đọc hiểu và review code Memento
 
-Tài liệu này mô tả **code đang chạy hiện tại**, không chỉ mô tả thiết kế trong các tài liệu MVP cũ. Cách đọc một feature nên đi theo chiều:
+Tài liệu này mô tả code trong repository hiện tại. Cách đọc một feature nên đi theo chiều:
 
 `Screen (sự kiện UI) → ViewModel (state/điều phối) → Repository interface → Repository implementation/data source → Room/Firebase → Cloud Function → cập nhật Room → UI nhận state mới`
 
@@ -156,15 +156,15 @@ Flow đầu-cuối:
 
 Đọc `ConnectionViewModel.confirmDisconnect` → `ConnectionRepositoryImpl.disconnectDirect` → `ConnectionFirestoreDataSource.disconnectDirect` → `functions/src/lifecycleService.ts::disconnectDirect`.
 
-## 5. Tạo và đăng một ảnh
+## 5. Tạo và đăng post ảnh
 
 ### Chọn recipient và ảnh
 
 1. Nút `+` tại navigation mở `CreatePostScreen`.
 2. `CreatePostViewModel` tải connection ACTIVE, user label và draft PENDING/FAILED gần nhất.
 3. User chọn connection; app dùng `connectionId`, không dùng userId làm recipient.
-4. `MediaPickerScreen` dùng Android photo picker; `MediaPreviewScreen` cho xem/xóa ảnh và nhập caption.
-5. MVP hiện chỉ chấp nhận đúng một IMAGE.
+4. `MediaPickerScreen` dùng Android photo picker; `MediaPreviewScreen` cho xem/xóa ảnh, chọn layout và nhập caption.
+5. Một post nhận 1–5 IMAGE. Một ảnh dùng SINGLE; nhiều ảnh dùng GRID, COLLAGE hoặc CAROUSEL.
 
 ### Prepare local draft
 
@@ -172,14 +172,14 @@ Khi xác nhận:
 
 1. `CreatePostViewModel.confirmAndUploadSelectedMedia()` gọi `PostRepository.preparePhotoPost()`.
 2. Repository kiểm tra user, connection và membership đều ACTIVE.
-3. Tạo cố định `postId` và `mediaId`.
-4. `PhotoProcessor.process()` đọc URI, sửa EXIF orientation, scale cạnh tối đa và nén JPEG vào private app storage.
-5. Trong một Room transaction, lưu `PostEntity` trạng thái `PENDING` và `MediaItemEntity`.
+3. Tạo cố định `postId` và một `mediaId` cho mỗi ảnh.
+4. `PhotoProcessor.process()` lần lượt đọc URI, sửa EXIF orientation, scale cạnh tối đa và nén JPEG vào private app storage.
+5. Lưu `PostEntity` trạng thái `PENDING` cùng các `MediaItemEntity` trong Room.
 6. Draft này sống qua lúc app bị đóng; lần mở sau `getLatestPendingPhoto()` khôi phục để retry.
 
 ### Upload và finalize remote
 
-1. `uploadPendingPhoto()` upload đúng file đã xử lý lên `connections/{connectionId}/posts/{postId}/{mediaId}.jpg`, kèm metadata `authorId`.
+1. `uploadPendingPhoto()` upload tuần tự từng file đã xử lý lên `connections/{connectionId}/posts/{postId}/{mediaId}.jpg`, kèm metadata `authorId`.
 2. Storage Rules kiểm tra đường dẫn và membership.
 3. Android gọi Callable `finalizePhotoPost` với cùng ID và metadata.
 4. Backend đọc metadata object thật trong Storage, kiểm tra MIME, size và author.
@@ -200,7 +200,7 @@ Khi xác nhận:
 
 ## 6. Home feed: realtime, cache ảnh, filter và phân trang
 
-Code hiện tại đã có đồng bộ phía người nhận, khác với một số mô tả cũ trong README/architecture.
+Feed đã có đồng bộ phía người nhận và cache offline.
 
 Flow:
 
@@ -250,7 +250,8 @@ Flow:
 Flow hiện tại còn đơn giản:
 
 1. `HistoryScreen` gọi `HistoryViewModel.loadHistory()`.
-2. `HistoryRepositoryImpl.loadHistory()` đọc Room qua `PostDao` rồi chuyển post thành chuỗi hiển thị.
+2. `HistoryRepositoryImpl.loadHistory()` đọc Room qua `PostDao` và trả danh sách `Post`.
+3. `HistoryScreen` render caption, thời gian và ảnh bằng `PhotoLayout` từ file cache local.
 
 DAO và model đã có nền tảng để phân biệt author/media/time, nhưng UI bộ lọc My Posts/Received, PHOTO/VIDEO và khoảng thời gian chưa hoàn thiện như một feature đầy đủ.
 
@@ -299,6 +300,6 @@ Khi review một flow, lần theo đủ các câu hỏi sau:
 
 ## 12. Phần đã có và phần chưa hoàn thiện
 
-Đã có trong code: email/password auth, profile, invite code cố định, DIRECT connection, realtime connection/profile, disconnect, một ảnh PHOTO/SINGLE, draft/retry, upload/finalize idempotent, realtime post sync, pagination, download cache, soft delete và scheduled cleanup.
+Đã có trong code: email/password auth, profile, invite code cố định, DIRECT connection, realtime connection/profile, disconnect, post PHOTO 1–5 ảnh với bốn layout, draft/retry, upload/finalize idempotent, realtime post sync, pagination, download cache, soft delete và scheduled cleanup.
 
-Chưa hoàn thiện hoặc chưa có: GROUP connection/invite, nhiều ảnh/layout khác, VIDEO, UI History filter đầy đủ, avatar upload và các trải nghiệm production sâu hơn như retry nền bằng WorkManager.
+Chưa hoàn thiện hoặc chưa có: GROUP connection/invite, VIDEO, UI History filter đầy đủ, avatar upload và các trải nghiệm production sâu hơn như retry nền bằng WorkManager.

@@ -1,291 +1,39 @@
-# Tiến độ MVP
-
-Đây là nơi theo dõi chính sau mỗi đợt làm việc. Mỗi đợt cập nhật: đã làm → bằng chứng kiểm tra → giới hạn/còn thiếu → việc tiếp theo. Không đánh dấu hoàn tất chỉ vì có model hoặc màn hình.
-
-## Lộ trình
-
-| Bước | Nội dung | Trạng thái |
-|---|---|---|
-| 1 | Môi trường Firebase, dữ liệu cũ, Rules/index và quy tắc MVP | Hoàn tất — 13/09/2026 |
-| 2 | Auth/profile tối thiểu và quên mật khẩu | Hoàn tất — 13/09/2026 |
-| 3 | Direct invite và transaction chống trùng | Hoàn tất — 13/09/2026 |
-| 4 | Đăng một ảnh thật: Room → Storage → Firestore | Hoàn tất — 14/09/2026 |
-| 5 | Đồng bộ người nhận, Home, pagination | Hoàn tất — 17/09/2026 |
-| 6 | History, soft delete và disconnect | Hoàn tất — 17/09/2026 |
-| 7 | Offline, retry, khôi phục sau tắt app, cleanup | Hoàn tất — 17/09/2026 |
-| 8 | Kiểm thử toàn hành trình trên hai phiên người dùng độc lập | Hoàn tất — 17/09/2026 |
-
-Mốc demo: hoàn thành bước 5. Mốc MVP tạm ổn: hoàn thành bước 8. Quy tắc làm việc ở [mvp-baseline](mvp-baseline.md).
-
-## Nền trước bước 1 — đã có
-
-Refactor schema User/Connection/Member/Post/Media/Invite; Room v3 và migration v2→v3; Auth/profile recovery; đọc connection theo membership; Home/History đọc Room. Đã gỡ request cũ và thành công upload giả. Đã qua build Android, 1 unit test username, 5 kiểm tra SQL và 16 kiểm tra Rules Emulator ở đợt trước.
-
-Đây chưa phải luồng chia sẻ hoàn chỉnh. Chưa triển khai invite, upload hay post sync. Forgot Password còn placeholder; profile chưa có dữ liệu hiển thị/chỉnh sửa đầy đủ.
-
-## 13/09/2026 — bước 1
-
-### Đã làm
-
-- Xác định app trỏ project `memento-fre`, database `(default)` ở `asia-southeast1`, bucket `memento-fre.firebasestorage.app`.
-- Kiểm kê từ API thật: Email/Password đã bật; 3 tài khoản không bị disable; chỉ có 3 user profile legacy, không có collection connection/request tại thời điểm kiểm tra.
-- Phát hiện Firestore dùng test-mode mở read/write đến 14/09/2026; Storage deny-all; chưa có composite index.
-- Chuẩn bị snapshot Rules và backup 3 profiles trong `.local/firebase-audit/` (gitignored); không đưa email/UID người dùng vào docs hoặc commit.
-- Thêm alias project rõ ràng, cấu hình Emulator Auth/Firestore và baseline Storage Rules deny-all.
-- Chốt phạm vi direct + một ảnh cùng giới hạn và chính sách vòng đời trong `mvp-baseline.md`.
-
-- Đã chuyển cả 3 profile thật sang 9 field schema mới bằng atomic batch có updateTime precondition. Giữ UID, username và createdAt; email vẫn ở Auth. Không xóa tài khoản hay collection.
-- Đã deploy Firestore Rules và 2 composite indexes lên `memento-fre`. Rules thật khớp file trong repo; hai index connections/posts đều READY. Storage giữ nguyên deny-all; file local bổ sung để quản lý phiên bản.
-
-### Bằng chứng kiểm tra
-
-- 16 kiểm tra Rules trên Firestore Emulator đạt.
-- 12 kiểm tra Auth/Profile trên Auth + Firestore Emulator đạt: hai tài khoản đăng ký, tạo profile, đăng nhập lại giữ đúng UID/profile, chặn sửa profile chéo và truy cập không đăng nhập.
-- Đọc lại Firebase thật: 3 tài khoản Auth vẫn hoạt động; 3 profile đủ field và giữ thông tin gốc; 2 indexes READY; Rules release ngày 13/09/2026 khớp repo.
-- Probe không đăng nhập vào collection users trên Firebase thật trả HTTP 403.
-- Chỉ thay đổi cấu hình/docs/test trong bước 1, không đổi Android code; không chạy lại build Android không cần thiết. Build của đợt nền trước đã đạt.
-
-### Chốt bước 1
-
-Môi trường Firebase thật đã dùng baseline mới, không còn phụ thuộc Rules test-mode hết hạn. Có thể dùng tài khoản cũ đăng nhập với code hiện tại. Chưa kiểm thử UI Android trên hai thiết bị hoặc mật khẩu tài khoản thật; smoke test hai tài khoản ở trên là emulator, không phải kiểm thử app end-to-end.
-
-Invite, upload/post sync và quyền Storage media chưa triển khai. Home trống là dự kiến vì chưa có connection/post. GROUP/VIDEO nằm ngoài bản MVP đầu. Bản sao lưu `.local/firebase-audit/` chỉ nằm trên máy và bị gitignore; đây không phải backup đầy đủ cho cả Firebase.
-
-### Tiếp theo — bước 2
-
-Hiển thị profile từ Room, chỉnh sửa displayName/username/bio qua repository; validation đồng nhất; gửi email reset password; kiểm tra đăng ký/login lỗi profile và chuyển tài khoản. Avatar upload chờ hạ tầng Storage. Không bắt đầu invite trước khi chốt bước 2.
-
-## 13/09/2026 — bước 2
-
-### Đã làm
-
-- Profile screen tải profile hiện tại từ Firestore, cập nhật cache Room và hiển thị email read-only từ Firebase Auth.
-- Cho sửa displayName, username và bio. Sau khi transaction Firestore hoàn tất, app đọc lại document và chỉ khi đó cập nhật Room/UI.
-- Validation dùng chung ở presentation và repository: displayName 1–100 ký tự; username 2–30 ký tự, bắt đầu bằng chữ/số và chỉ dùng chữ Latin, số, `.` hoặc `_`; bio tối đa 500 ký tự.
-- Rules thật kiểm tra cùng giới hạn và bắt buộc `usernameNormalized == username.lower()`, tránh client ghi cặp username/search key không nhất quán.
-- Username mặc định sau đăng ký được lọc từ phần trước `@`; nếu không đủ điều kiện, dùng fallback ổn định từ UID.
-- Thay màn hình Forgot Password placeholder bằng form gọi Firebase Auth gửi email reset, có validation, loading, lỗi và thông báo chung sau khi gửi.
-- Cập nhật API AuthRepository cho đọc/sửa profile, reset password và email tài khoản; thay các import Hilt Compose đã deprecated.
-
-### Bằng chứng kiểm tra
-
-- Android debug build thành công; Hilt/Compose và toàn bộ module compile.
-- 2 unit tests ProfileValidator đạt; unit test username nền trước vẫn đạt.
-- Firestore Emulator: 17 kiểm tra Rules đạt, gồm trường hợp từ chối usernameNormalized giả.
-- Auth + Firestore Emulator: 13 kiểm tra đạt với hai tài khoản, đăng ký/đăng nhập lại, giữ profile, gửi password reset, chặn sửa chéo và chặn truy cập không đăng nhập.
-- Firestore Rules mới đã deploy lên `memento-fre` và nội dung remote khớp file repo. Đọc lại xác nhận 3 profile vẫn đúng schema; 3 tài khoản Auth vẫn hoạt động; hai index vẫn READY.
-
-### Chốt bước 2
-
-Auth/profile tối thiểu đã có implementation thật. Người dùng có thể đăng ký, đăng nhập, xem/sửa profile, đăng xuất và yêu cầu email reset password. Username vẫn được phép trùng theo schema; invite là cơ chế kết nối chính.
-
-Chưa gửi email reset tới tài khoản thật trong quá trình tự động để tránh làm phiền; đường đi đã được kiểm tra trên Auth Emulator. Chưa kiểm thử UI thủ công trên thiết bị, giao diện chưa có avatar và Splash vẫn cần mạng. Các phần này không chặn bước direct invite; avatar và offline recovery nằm ở bước 4/7.
-
-### Tiếp theo — bước 3
-
-Triển khai direct invite end-to-end: Callable Cloud Function tạo/redeem/revoke code, transaction tạo connection/member và lock chống direct trùng, giới hạn thử sai, Rules/App Check phù hợp, UI tạo/nhập/chia sẻ code và test concurrent redeem. Không mở quyền client ghi trực tiếp connection/member/invite.
-
-## 13/09/2026 — bước 3
-
-### Đã làm
-
-- Thêm ba Callable Cloud Functions Gen 2 Node.js 22 tại `asia-southeast1`: tạo, redeem và revoke direct invite; cả ba yêu cầu Firebase Auth và App Check.
-- Mã được sinh ngẫu nhiên mật mã từ alphabet không gây nhầm, hiển thị `XXXX-XXXX`, hết hạn sau 10 phút, dùng một lần. Firestore chỉ lưu SHA-256; raw code chỉ nằm trong bộ nhớ UI để hiển thị/chia sẻ.
-- Tạo mã mới revoke mã active trước đó trong transaction. Revoke dùng con trỏ backend theo UID, không cần client biết codeHash.
-- Redeem transaction kiểm tra invite, thời gian server, lượt dùng, hai profile, self-redeem và direct lock. Thành công tạo connection Auto ID, hai member ACTIVE, lock unique và chuyển invite sang USED cùng một commit.
-- Thêm giới hạn 5 lần thử/10 phút/UID. Lỗi invalid/self/duplicate không tăng `usedCount`; cặp đã ACTIVE không thể tạo direct thứ hai kể cả khi chạy đồng thời.
-- Android Connection screen có tạo mã, tạo lại, share sheet, revoke, nhập/redeem code và danh sách người đã kết nối. Redeem remote đã thành công không bị báo sai là thất bại nếu refresh cache Room ngay sau đó gặp lỗi. Danh sách connection dùng Firestore snapshot listener nên creator và redeemer đều tự nhận thay đổi.
-- App Check: debug build dùng Debug provider, release dùng Play Integrity; đã đăng ký SHA-256 debug certificate và xác nhận Play Integrity config TTL 1 giờ.
-- Firestore Rules cấm client đọc/ghi `invites`, `directInviteOwners`, `directConnectionLocks`, `inviteRedeemRateLimits`; connection/member vẫn chỉ đọc theo membership và không cho client tự ghi.
-- Đã deploy ba Functions và Rules lên `memento-fre`; đặt Artifact Registry cleanup 7 ngày.
-
-### Bằng chứng kiểm tra
-
-- Functions TypeScript build; 3 unit tests cho normalize/format/random/hash/directKey đạt; `npm audit --omit=dev` không còn vulnerability được báo.
-- Firestore Emulator integration đạt các trường hợp create, replace, revoke, self-redeem, expiry, 5 lần/10 phút, duplicate direct không tiêu invite và hai user redeem đồng thời chỉ một người thành công.
-- 22 kiểm tra Firestore Rules đạt; 13 kiểm tra Auth/Profile vẫn đạt sau Rules mới.
-- Android debug và release build thành công, xác nhận App Check provider đúng theo build variant.
-- Firebase thật liệt kê đủ ba Callable v2 ở `asia-southeast1`; request không xác thực bị HTTP 401. Rules remote đã release cùng đợt deploy.
-
-### Chốt bước 3
-
-Direct invite đã có implementation từ UI tới backend thật; client không thể tự sửa invite, membership hoặc khóa chống trùng. Backend chỉ tạo connection khi cả hai Auth UID có profile. GROUP invite vẫn chưa bật.
-
-Đã chạy hành trình thật và phát hiện danh sách creator từng chỉ tải khi Auth đổi; lỗi này đã được sửa bằng Firestore snapshot listener. Khi chạy debug lần đầu trên thiết bị/emulator mới vẫn phải đăng ký App Check debug token lấy từ log; token này không được commit. Raw code không khôi phục sau khi app bị đóng; tạo code mới là hành vi dự kiến cho MVP. Rate limit hiện theo UID, chưa bao phủ IP/device. Abuse nâng cao được kiểm tra tiếp ở bước 8 hoặc trước khi mở rộng người dùng.
-
-### Bổ sung sau kiểm thử hai tài khoản — 14/09/2026
-
-- U2 redeem thành công từng thấy U1 ngay, nhưng U1 không thấy U2 do `ConnectionViewModel` chỉ tải connection lúc Auth state thay đổi.
-- Đã thêm listener realtime cho đúng query membership (`memberIds`, `ACTIVE`, `lastPostAt`). Mỗi snapshot mới kích hoạt lại đồng bộ connection/member vào Room và tải profile của thành viên còn lại.
-- Listener được hủy khi đổi tài khoản hoặc ViewModel bị giải phóng, tránh dữ liệu U1 chảy sang state U2.
-- Đã build, cài đè bản debug lên hai emulator và giữ nguyên session. Kiểm tra trực tiếp xác nhận màn hình U1 hiển thị `u2 (@u2)` và màn hình U2 hiển thị `u1 (@u1)`.
-
-### Tiếp theo — bước 4
-
-Triển khai đăng đúng một ảnh vào một connection ACTIVE: tạo cố định postId/mediaId, ghi Room PENDING, resize cạnh dài tối đa 1.920 px và nén JPEG ≤ 5 MiB, mở Storage Rules đúng path/member, upload file trước, batch ghi Post + `lastPostAt`, rồi đổi local sang SYNCED. Bổ sung retry dùng lại ID và kiểm thử lỗi giữa Storage/Firestore; chưa làm listener/pagination người nhận cho đến bước 5.
-
-## 14/09/2026 — bước 4
-
-### Đã làm
-
-- Create Post đã dùng luồng thật cho đúng một ảnh PHOTO/SINGLE và caption tùy chọn tối đa 1.000 ký tự. App sinh `postId` và `mediaId` một lần, ghi Room `PENDING`, sửa hướng EXIF, resize cạnh dài tối đa 1.920 px, nén JPEG bắt đầu ở quality 82 và giữ file dưới 5 MiB.
-- File đã xử lý được lưu ổn định trong thư mục riêng của app và upload tới `connections/{connectionId}/posts/{postId}/{mediaId}.jpg`. Khi upload lỗi, Room chuyển `FAILED`; mở lại app khôi phục bài và nút retry dùng lại đúng ID, file và Storage path cũ.
-- Thêm Callable `finalizePhotoPost` yêu cầu Auth + App Check. Backend kiểm tra path, MIME, kích thước, dung lượng và metadata `authorId` của object thật; sau đó transaction kiểm tra connection/membership ACTIVE, tạo Post và cập nhật `connection.lastPostAt/updatedAt` cùng lúc. Gọi lại cùng dữ liệu trả kết quả cũ, không tạo bài trùng hoặc đổi `createdAt`.
-- Storage Rules chỉ cho member ACTIVE đọc; chỉ uploader được tạo/ghi lại đúng file JPEG, đúng metadata và tối đa 5 MiB. Client không được xóa media. Quyền liên dịch vụ `roles/firebaserules.firestoreServiceAgent` đã cấp cho Storage service agent để rule thật có thể đọc connection/member từ Firestore.
-- Home của người đăng đọc bài local từ Room và hiển thị đúng file đã xử lý. Đã sửa mapping cache local theo connection/post/media thay vì ghép trực tiếp Storage path.
-- Đã deploy `finalizePhotoPost` và Storage Rules lên `memento-fre`.
-
-### Bằng chứng kiểm tra
-
-- Android debug build thành công; APK cuối đã cài lên cả hai emulator.
-- 5 unit tests Functions đạt. Integration emulator đạt create/redeem invite và post finalize: membership, object metadata, atomic Post + `lastPostAt`, từ chối media sai và retry idempotent.
-- 9 kiểm tra Storage Rules đạt: member/outsider, path, MIME, dung lượng, overwrite của uploader khác và delete.
-- Kiểm thử thật trên U1: lần đầu giữ bài `FAILED` khi Storage từ chối; sau khi bổ sung IAM, mở lại app khôi phục bài, retry upload đạt 100% và quay về Home. Log callable xác nhận `auth: VALID`, `app: VALID`; Room xác nhận `SYNCED` và timestamp của Post trùng `connection.lastPostAt`.
-
-### Chốt bước 4
-
-Phía người gửi đã có đường đăng một ảnh thật, retry qua lần mở app mới và commit metadata an toàn. Firestore không thể atomic cùng Storage, nên file upload xong nhưng finalize thất bại vẫn có thể trở thành orphan; retry hiện tái sử dụng file đó, còn cleanup định kỳ thuộc bước 7.
-
-U2 chưa tự tải bài mới và chưa hiển thị ảnh remote vì post listener, pagination, download/cache là phạm vi bước 5. Vì vậy bước 4 xác nhận việc gửi và lưu server, chưa khẳng định hành trình chia sẻ hai chiều đã hoàn tất.
-
-### Tiếp theo — bước 5
-
-Mở quyền đọc Post đúng membership, đồng bộ từng connection theo trang 20 bài, nghe bài mới, lưu metadata vào Room, tải/cache ảnh Storage và hiển thị cùng một bài trên U2. Hoàn thiện trạng thái loading/lỗi và kiểm tra lại bằng hai tài khoản thật, gồm đóng/mở app và tránh ghi trùng Room.
-
-## 15/09/2026 — đơn giản hóa mã kết nối trước bản nộp
-
-- Thay invite tạm thời bằng một mã cố định cho mỗi user: tạo một lần sau khi profile sẵn sàng, hiển thị/share tại Profile, không expire, revoke hoặc consume.
-- `getMyInviteCode` trả lại cùng code khi gọi nhiều lần; tài khoản cũ được cấp code ở lần login/Profile đầu tiên nên không cần migration bắt buộc.
-- `redeemDirectInvite` dùng code lookup để tìm owner. Một code có thể được nhiều user khác nhau dùng; nhập lại bởi cùng một cặp trả connection cũ, không tạo document trùng.
-- Vẫn giữ Auth, App Check, self-connect guard, kiểm tra hai profile và `directConnectionLocks` transaction. Đã bỏ UI create/revoke/countdown và các nhánh expiry/rate-limit/usedCount của flow nộp bài.
-- Android compile debug, Functions type-check, integration emulator và 22 Rules checks đều đạt. `getMyInviteCode`, `redeemDirectInvite`, `finalizePhotoPost` cùng Rules mới đã deploy lên Firebase thật; hai function create/revoke cũ đã xóa.
-
-### Dọn dẹp trước bước 5 — 14/09/2026
-
-- Đã xóa các nhánh thư mục source trống còn lại từ migration, mapper/model connection và media pipeline cũ.
-- Đã chạy Gradle clean để xóa output build có thể tái tạo, gồm các thư mục bản sao có hậu tố ` 2`.
-- Sau khi dọn, toàn project không còn thư mục trống ngoài ba thư mục nội bộ chuẩn của Git (`objects/info`, `objects/pack`, `refs/tags`). Không có source hoặc cấu hình chức năng nào bị xóa trong đợt dọn dẹp này.
-
-### Sửa tên người nhận ở Create Post — 14/09/2026
-
-- DIRECT connection theo schema có `name = null`; Create Post trước đây fallback thành `Direct connection`, nên người dùng không biết đang chọn ai khi có nhiều connection.
-- Create Post giờ ghép member ACTIVE với profile đã đồng bộ và hiển thị `displayName (@username)`. ID dùng để đăng vẫn là `connectionId`, không gửi trực tiếp theo userId.
-- Preview dùng cùng nhãn người nhận để người dùng kiểm tra lại trước khi upload. Group sau này ưu tiên `connection.name`, có fallback riêng nếu thiếu tên.
-- Android debug build đạt; bản mới đã cài trên hai emulator. Kiểm tra thật: U1 thấy `u2 (@u2)` và U2 thấy `u1 (@u1)` trong Share with.
-- Home trước đó vẫn hiện `Direct connection` vì khi đọc `ConnectionEntity` từ Room, repository chuyển sang domain với danh sách members rỗng. Đã sửa mapping để nạp đầy đủ member của từng connection và dùng chung hàm tạo nhãn connection.
-- Kiểm tra bản cuối: chip cạnh `All` và nhãn trên Post của U1 đều là `u2 (@u2)`; chip Home của U2 là `u1 (@u1)`.
-
-## 16/09/2026 — bắt đầu bước 5: listener bài ảnh
-
-- Home nghe danh sách connection ACTIVE của tài khoản hiện tại rồi mở một Post listener riêng cho từng connection, query `status == ACTIVE`, `createdAt DESC`, giới hạn 20 bài mới nhất.
-- Snapshot được map và upsert vào Room với trạng thái `SYNCED`; media ảnh được tải từ Storage vào cache ổn định `pending_media/{connectionId}/{postId}/{mediaId}.jpg`. File tải tạm được kiểm tra đúng byte size trước khi đổi tên vào cache.
-- Home cập nhật từ Room sau mỗi snapshot, tăng cache revision sau khi download để Compose nạp ảnh vừa xuất hiện, hiển thị ảnh remote bằng cùng đường cache với ảnh sender và giữ danh sách hiện tại nếu listener/tải ảnh lỗi. Listener được gỡ khi connection rời danh sách hoặc ViewModel bị hủy.
-- Firestore Rules đã mở read Post cho member ACTIVE nhưng vẫn khóa toàn bộ client write. Rule emulator kiểm tra member đọc/query được, outsider bị chặn và member không thể tự ghi Post.
-- Media picker tiếp tục dùng Android Photo Picker (`PickVisualMedia`): hệ thống chỉ cấp URI người dùng chọn nên không xin quyền đọc toàn bộ thư viện. Manifest yêu cầu module Photo Picker backport từ Google Play services cho thiết bị hỗ trợ.
-- Android debug build, 5 unit tests Functions, 9 Storage Rules checks và Firestore Rules emulator đều đạt. Firestore Rules mới đã deploy lên `memento-fre`; APK được cài giữ dữ liệu trên hai emulator và xác nhận U2 nhận metadata, tải file cache rồi render ảnh U1 đã đăng, không còn `PERMISSION_DENIED`.
-- Tiêu đề mỗi Post card lấy profile theo `post.authorId`; chip filter vẫn dùng tên người còn lại của connection. Nhờ vậy Alice thấy bài mình đăng mang tên Alice, còn Andy cũng thấy đúng Alice là tác giả.
-
-## 17/09/2026 — hoàn thiện phân trang bước 5
-
-- Mỗi connection ACTIVE có cursor Firestore riêng. Listener tiếp tục nghe 20 bài mới nhất; nút `Load older moments` dùng `startAfter(lastDocument)` để lấy tiếp tối đa 20 bài cho từng connection còn dữ liệu.
-- Trang cũ được upsert vào Room bằng composite key hiện có nên snapshot lặp hoặc retry không tạo bài trùng. Khi bài mới đẩy ranh giới trang đầu xuống, cursor chưa phân trang được cập nhật; sau khi đã tải trang cũ, listener không ghi đè cursor đó.
-- Trạng thái `hasMore` và `isLoadingMore` được đưa lên Home UI. Nút tải thêm tự ẩn khi mọi connection đã hết trang; lỗi giữ nguyên feed hiện tại để người dùng retry.
-- Key Compose của Post card gồm cả `connectionId:postId`, đúng với khóa dữ liệu và tránh va chạm nếu hai connection tình cờ có cùng postId.
-- Android debug build, 5 unit tests Functions và Firestore Rules emulator đều đạt sau thay đổi.
-
-## 17/09/2026 — bước 6: soft delete và disconnect
-
-### Đã làm
-
-- Tác giả có nút `Delete` trên bài của mình và phải xác nhận trước khi xóa. Người nhận không thấy thao tác này. Callable `softDeletePost` kiểm tra Auth, App Check, membership ACTIVE và `authorId`, sau đó chỉ đổi metadata sang `DELETED` cùng `deletedAt/deletedBy/updatedAt`; gọi lại an toàn và không hard-delete document.
-- Home nghe cả trang bài mới lẫn 20 bản ghi `DELETED` cập nhật gần nhất cho từng connection. Khi nhận trạng thái xóa, Room đổi trạng thái, feed/History tự ẩn bài và file cache do app quản lý được xóa.
-- Mỗi direct connection có thao tác `Disconnect` với hộp xác nhận. Callable `disconnectDirect` đóng connection, làm rỗng `memberIds`, chuyển cả hai member sang `LEFT`, ghi `leftAt` và đóng direct lock trong cùng transaction.
-- Sau disconnect, query connection không còn trả document cho hai user; Firestore/Storage Rules từ chối đọc lịch sử và media. App thu hồi membership local, ẩn Home/History và xóa cache ảnh của connection. Dùng lại mã kết nối sẽ tạo connection ID mới, không khôi phục lịch sử cũ.
-- Thêm composite index `posts(status, updatedAt DESC)` cho listener xóa và đã deploy hai callable cùng index lên `memento-fre`.
-
-### Bằng chứng kiểm tra
-
-- 7 unit tests Functions đạt. Integration Firestore Emulator đạt author-only delete, recipient/outsider bị từ chối, delete/disconnect idempotent, finalize bị từ chối sau disconnect và reconnect tạo lịch sử mới.
-- Firestore Rules Emulator đạt query ACTIVE/DELETED khi còn membership và từ chối connection/member/post sau khi đóng. Storage Rules Emulator từ chối download/upload sau khi membership chuyển LEFT.
-- Toàn bộ Android `testDebugUnitTest` và debug APK build thành công. APK được cài đè giữ dữ liệu trên hai emulator: Alice thấy `Delete` ở bài của Alice, Andy không thấy; cả hai thấy `Disconnect` ở danh sách kết nối.
-- Không bấm xác nhận xóa hoặc disconnect trên dữ liệu thật Alice/Andy; kiểm thử mutation đầy đủ dùng emulator để giữ nguyên dữ liệu demo.
-
-### Chốt bước 6
-
-Soft delete và direct disconnect đã hoàn chỉnh từ UI, local cache đến backend/rules. Storage object của bài soft-delete chưa bị xóa ngay để giữ thứ tự metadata trước cleanup; job cleanup orphan/soft-deleted media thuộc bước 7.
-
-### Tiếp theo — bước 7
-
-Hoàn thiện offline/retry và phục hồi tiến trình khi app bị dừng giữa upload/finalize; định nghĩa rồi triển khai cleanup an toàn cho orphan object và media của bài đã soft-delete, có thời gian chờ để không đua với retry.
-
-## 17/09/2026 — bước 7: offline recovery, retry và cleanup
-
-### Đã làm
-
-- Splash không còn đăng xuất session chỉ vì mất mạng. Khi Auth vẫn có user và Room có profile đúng UID, lỗi mạng từ Firestore/Functions dùng cache để vào app; lỗi permission hoặc dữ liệu không hợp lệ vẫn thất bại bình thường.
-- Draft ảnh `PENDING/FAILED` tiếp tục giữ nguyên `postId`, `mediaId`, file JPEG và metadata. Khi mở lại Create Post, app chọn đúng connection và hiển thị `Resume pending upload`, đưa thẳng tới preview để retry cùng Storage path/finalize idempotent.
-- Chặn tạo draft mới khi còn draft hợp lệ. Draft bị gián đoạn trước khi có media hoặc có file sai byte size được dọn khỏi Room/cache; draft hợp lệ chỉ bị bỏ khi người dùng xác nhận `Discard draft`.
-- Thêm scheduled Function `cleanupExpiredMedia` chạy hằng ngày lúc 03:00 giờ Việt Nam. Job chỉ xét đúng path media của app và dùng grace period 7 ngày: xóa orphan không có Post hoặc object được Post `DELETED` tham chiếu sau khi cả object/deletedAt đủ tuổi; giữ bài ACTIVE, media mới, path lạ và metadata Post.
-- Đã deploy scheduled Function lên `memento-fre`; không kích hoạt thủ công để tránh xóa dữ liệu thật ngoài lịch/chính sách.
-
-### Bằng chứng kiểm tra
-
-- 11 Functions unit tests đạt, gồm parser path, grace period và cleanup service với orphan/deleted/active/recent/mismatch. Integration Firestore Emulator cho invite, finalize idempotent, delete/disconnect/reconnect vẫn đạt.
-- Toàn bộ Android `testDebugUnitTest` và debug APK build thành công sau thay đổi Room/repository/navigation.
-- Cài đè APK trên hai emulator giữ nguyên dữ liệu. Trên Alice, tắt Wi‑Fi và mobile data, force-stop rồi mở lại vẫn vào app với Home/navigation từ cache; không bị chuyển về Login. Mạng đã được bật lại sau kiểm tra.
-- `firebase functions:list` xác nhận `cleanupExpiredMedia` là scheduled function Node.js 22 tại `asia-southeast1`.
-
-### Chốt bước 7
-
-App có đường phục hồi thủ công rõ ràng và idempotent sau lỗi mạng/process death, không tự tạo bài trùng. Cleanup có phạm vi path hẹp và khoảng chờ 7 ngày. Bản sao file người dùng đã lưu ngoài vùng riêng của app không thể bị thu hồi.
-
-### Tiếp theo — bước 8
-
-Chạy checklist toàn hành trình trên hai thiết bị: tạo/redeem, gửi/nhận, pagination, force-stop giữa upload, retry, xóa, disconnect, reconnect và đổi tài khoản; ghi lại kết quả cuối mà không dùng dữ liệu production nếu thao tác phá hủy lịch sử demo.
-
-## 17/09/2026 — bước 8: kiểm thử toàn hành trình
-
-### Đã làm
-
-- Chạy Firebase Emulator Suite cho Auth, Firestore, Functions và Storage bằng đúng project ID `memento-fre`; thêm manifest chỉ dành cho debug để cho phép kết nối HTTP tới Emulator. Callable vẫn bắt buộc App Check ở production nhưng bỏ enforcement khi chạy trong Functions Emulator.
-- Dùng hai Android user profile độc lập trên cùng emulator làm Alice và Bob. Mỗi profile có Auth session, Room database, cache và process riêng; dữ liệu production không được dùng cho các thao tác xóa/ngắt kết nối.
-- Chạy xuyên suốt: đăng nhập hai tài khoản, redeem mã mời, nhận connection qua listener, chọn ảnh bằng Android Photo Picker, đăng ảnh, nhận ảnh, soft delete, disconnect, dùng lại mã mời để tạo connection mới và xác nhận lịch sử cũ không quay lại.
-- Sửa lỗi tên tác giả sau khi Alice đăng bài: Home trước đây chỉ tìm profile tác giả trong Room nên có thể hiện `Unknown author`. Repository giờ tải profile còn thiếu từ Firestore, kiểm tra tài khoản không đổi giữa lúc tải rồi cache lại vào Room.
-- Kiểm tra phục hồi upload bằng cách ngắt đường tới Storage/Functions giữa lúc upload rồi force-stop app. Khi mở lại, Create Post hiện `Resume pending upload`; `Retry upload` dùng lại draft/path cũ và chỉ tạo đúng một Post `ACTIVE`.
-- Kiểm tra pagination từ trạng thái Room sạch với 25 Post trong connection Emulator: trang đầu dừng ở 20 bài và hiện `Load older moments`; tải tiếp hiển thị đủ các bài cũ còn lại, không còn nút tải thêm.
-- Photo Picker xác nhận app chỉ nhận quyền truy cập ảnh được chọn; không xuất hiện yêu cầu quyền đọc toàn bộ media. Người nhận nhìn thấy đúng tên Alice và không có nút `Delete`; Alice có quyền xóa bài của mình.
-
-### Bằng chứng kiểm tra
-
-- Android `:feature:home:data:testDebugUnitTest` và `:app:assembleDebug` hoàn tất thành công.
-- Firestore xác nhận Post đầu có đúng `authorId` của Alice; sau soft delete có `status = DELETED` và `deletedBy` là Alice. Listener của cả Alice và Bob đều ẩn bài.
-- Disconnect chuyển connection cũ sang `CLOSED` và xóa membership. Reconnect bằng cùng mã mời tạo connection ID mới `ACTIVE`; Home mới không đọc lại lịch sử connection cũ.
-- Sau retry upload, connection mới chỉ có đúng một Post được finalize `ACTIVE`. Bob nhận bài qua listener, thấy tác giả Alice và không có thao tác xóa.
-- Pagination được kiểm tra sau khi xóa app data của riêng profile Bob để loại cache cũ, đăng nhập lại rồi tải 20 + 5 bài từ Emulator.
-
-### Chốt bước 8
-
-Hành trình MVP đã đạt trên hai sandbox người dùng độc lập, gồm quyền Photo Picker, realtime listener, pagination, process-death recovery và vòng đời delete/disconnect/reconnect. Trước khi phát hành rộng vẫn nên smoke-test thêm trên hai thiết bị vật lý khác phiên bản Android và mạng thật; đây là release check, không phải phần logic MVP còn thiếu.
-
-## 18/09/2026 — mở rộng 1–5 ảnh và layout động (đang ở branch, chưa commit)
-
-### Đã làm
-
-- Photo Picker nhận tối đa 5 ảnh; Preview chọn GRID, COLLAGE hoặc CAROUSEL, còn một ảnh luôn dùng SINGLE.
-- Preview, Home và History dùng chung `PhotoLayout`; backend nhận `mediaItems[]`, kiểm tra 1–5 ảnh, position liên tục và vẫn tương thích payload một ảnh cũ.
-- Resize/nén và upload chạy tuần tự theo position để giới hạn peak memory. Xử lý ảnh chạy trên luồng I/O, UI nhận tiến độ sau từng ảnh; upload có tiến độ tổng và timeout riêng cho từng file.
-- Draft Room giữ toàn bộ media và layout để retry sau khi tắt app; server finalize vẫn idempotent với cả danh sách media.
-- Sáu Cloud Functions đã deploy thành công lên `memento-fre`; `finalizePhotoPost` mới đang ACTIVE.
-
-### Bằng chứng hiện tại
-
-- 13 Functions unit tests đạt, gồm multi-photo validation và tương thích payload cũ; 5 schema checks đạt.
-- Android debug build và lint đạt trên bản source hiện tại; sau bổ sung tiến độ xử lý, hai module post compile lại thành công.
-- APK cài và mở được trên Pixel 9 emulator, không có crash AndroidRuntime.
-- Tài khoản đang đăng nhập hiện không có connection ACTIVE, nên kiểm thử UI production dừng đúng ở “No connections yet”; chưa tạo dữ liệu/kết nối thật chỉ để test.
-
-### Còn lại trước khi chốt nhánh
-
-- Chạy UI end-to-end 2–5 ảnh trên Firebase Emulator hoặc hai tài khoản test có connection: kiểm tra ba layout, progress, retry và ảnh xuất hiện đúng thứ tự ở thiết bị nhận.
-- Chưa triển khai video upload/nén/thumbnail. Đây là hạng mục tiếp theo nhưng dài và rủi ro hơn multi-photo.
-- Các thay đổi trong mục này chủ ý chưa commit theo yêu cầu giữ một version ổn định để quay lại.
+# Trạng thái và phạm vi hiện tại
+
+Tài liệu này là snapshot hiện trạng, không phải nhật ký theo đợt. Chi tiết kiến trúc, schema và lifecycle được giữ ở các tài liệu chuyên biệt để tránh lặp và lệch nội dung.
+
+## Đã triển khai
+
+- Firebase Auth email/password, profile theo UID, chỉnh sửa profile và reset password.
+- Mã kết nối cố định, redeem DIRECT qua backend transaction, chống self-connect và connection trùng.
+- Realtime connection sync, nhãn người dùng, disconnect và thu hồi quyền remote.
+- Post PHOTO gồm 1–5 ảnh với bốn layout; xử lý JPEG, draft local, progress upload, finalize idempotent và retry sau process death.
+- Feed Room-first, realtime sync phía nhận, tải/cache media, phân trang 20 bài cho mỗi connection và filter All/từng connection.
+- Soft delete có tombstone; cleanup Storage cho orphan/media đã xóa sau grace period.
+- Offline fallback cho profile/feed đã cache; cache media giới hạn dung lượng và có guard theo UID/membership.
+- History hiển thị post thật và các layout ảnh từ Room.
+
+## Chưa triển khai hoặc chưa hoàn thiện
+
+- GROUP connection/invite và chính sách lịch sử cho group.
+- VIDEO upload/transcode/playback.
+- Avatar upload.
+- UI filter History theo My/Received, loại post và khoảng thời gian dù DAO đã có nền tảng.
+- Retry nền tự động; hiện người dùng chủ động retry hoặc discard draft.
+- Hard-delete metadata Firestore và cơ chế thu hồi bản sao đã được lưu ngoài app.
+
+## Invariant cần giữ
+
+- Client không được tự ghi connection, membership, invite lookup hoặc Post remote; mutation đi qua Callable Functions.
+- `postId`, `mediaId`, Storage path và nội dung draft không đổi qua retry.
+- Home/History chỉ đọc post ACTIVE trong connection/membership ACTIVE của UID hiện tại.
+- Disconnect tạo ranh giới lịch sử: kết nối lại dùng connection ID mới và không mở lại dữ liệu cũ.
+- Cleanup chỉ xử lý path hợp lệ sau grace period; không xóa media của post ACTIVE.
+
+## Tài liệu nguồn
+
+- [Kiến trúc](architecture.md)
+- [Schema](data-schema.md)
+- [Lifecycle post ảnh](photo-post-lifecycle.md)
+- [Môi trường Firebase](firebase-environment.md)
+- [Hướng dẫn review code](code-review-guide.md)

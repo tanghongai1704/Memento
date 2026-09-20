@@ -4,37 +4,40 @@
 
 | Mục | Giá trị |
 |---|---|
-| Project Firebase thật | `memento-fre` |
+| Project thật | `memento-fre` |
 | Android package | `com.tangai.memento` |
 | Firestore database/location | `(default)` / `asia-southeast1` |
 | Storage bucket | `memento-fre.firebasestorage.app` |
-| Alias CLI | `live` → memento-fre; `emulator` → demo-memento-schema |
+| Alias CLI | `live` → `memento-fre`; `emulator` → `demo-memento-schema` |
 | Functions region/runtime | `asia-southeast1` / Node.js 22 |
-| Emulator | Auth 127.0.0.1:9099; Firestore 127.0.0.1:8080; Functions 127.0.0.1:5001; Storage 127.0.0.1:9199 |
+| Emulator | Auth 9099; Firestore 8080; Functions 5001; Storage 9199 |
 
-App hiện vẫn kết nối Firebase thật theo `app/google-services.json`. Cấu hình emulator trong firebase.json chỉ dành cho test script; chưa tự chuyển Android app vào Emulator.
+Không có default project trong `.firebaserc`. Mọi lệnh thay đổi remote phải ghi rõ `--project memento-fre`; không dùng project demo để deploy. Trạng thái trong repository không chứng minh trạng thái đang chạy trên Firebase, vì commit không tự deploy.
 
-Không đặt default project cho CLI: lệnh thay đổi remote phải ghi `--project memento-fre` rõ ràng. Không dùng project demo để deploy. Không đổi billing hoặc tạo Firebase project mới trong bước 1.
+## Runtime và App Check
 
-## Trạng thái sau bước 4 — 14/09/2026
+Android dùng `app/google-services.json`. Debug build kết nối emulator khi private app storage có file marker `use_firebase_emulators`; trên Android Emulator, các SDK trỏ tới `10.0.2.2`. File `firebase_emulator_account` có thể chứa email và password test trên hai dòng để debug build tự đăng nhập. Không commit marker, credential hoặc App Check debug token.
 
-Cả 3 profile đã migrate và kiểm tra lại; tài khoản Auth giữ nguyên. Firestore Rules đã deploy và khớp file repo. Hai composite indexes connections/posts đều READY. Probe users không đăng nhập trả 403. Backup trước và báo cáo sau nằm trong `.local/firebase-audit/` và `.local/firebase-audit/after-step1/`.
+Production Callable Functions enforce Firebase Auth và App Check. Debug dùng Debug provider; release dùng Play Integrity. Release signing certificate/Play App Signing phải được đăng ký trước khi phát hành.
 
-Bước 2 đã deploy Rules validation username chặt hơn và xác nhận remote khớp repo. Snapshot kiểm tra sau bước 2 nằm trong `.local/firebase-audit/after-step2/`. Profile edit và password reset được kiểm tra bằng Emulator; không gửi reset mail tới tài khoản thật.
+Các Functions được export từ source hiện tại:
 
-Ngày 15/09/2026 đã deploy `getMyInviteCode`, `redeemDirectInvite`, `finalizePhotoPost` và Rules mới tại `asia-southeast1`; hai function tạm thời `createDirectInvite` và `revokeDirectInvite` đã xóa. Android App Check đã tích hợp Debug provider cho debug và Play Integrity cho release; SHA-256 debug certificate đã đăng ký trên Firebase. Lần đầu chạy debug app trên thiết bị/emulator, lấy debug token trong log và đăng ký tại Firebase Console → App Check → Manage debug tokens; không commit token. Play Integrity config có TTL 1 giờ; signing certificate phát hành thật cần bổ sung khi có release key/Play App Signing.
+- `getMyInviteCode`
+- `redeemDirectInvite`
+- `finalizePhotoPost`
+- `softDeletePost`
+- `disconnectDirect`
+- `cleanupExpiredMedia` (scheduled)
 
-Artifact Registry ở `asia-southeast1` tự xóa function images cũ hơn 7 ngày để tránh tích lũy storage.
+Storage Rules gọi Firestore để kiểm tra membership; service agent của Storage cần quyền `roles/firebaserules.firestoreServiceAgent`, nếu thiếu upload/read sẽ bị từ chối dù Auth hợp lệ.
 
-Bước 4 đã deploy `finalizePhotoPost` Gen 2 và Storage Rules giới hạn media theo membership/path/MIME/size/author. Storage service agent có `roles/firebaserules.firestoreServiceAgent`; thiếu binding này thì mọi upload dùng `firestore.get/exists` trong Storage Rules bị 403 dù Firebase Auth hợp lệ. Kiểm thử thật xác nhận callable nhận Auth và App Check hợp lệ, post chuyển SYNCED và `lastPostAt` được cập nhật.
+## File và dữ liệu nhạy cảm
 
-## File nên commit
+Commit cấu hình, Rules, indexes, source/test Functions và scripts kiểm tra. Không commit `functions/node_modules`, `functions/lib`, `.local/`, `.firebase/`, log, debug token, credential hoặc backup dữ liệu người dùng.
 
-`.firebaserc`, `firebase.json`, `firestore.rules`, `firestore.indexes.json`, `storage.rules`, `functions/package.json`, `functions/package-lock.json`, source/test Functions, các script test và docs. Không commit `functions/node_modules`, `functions/lib`, `.local/`, `.firebase/`, log, debug token, credential hoặc backup dữ liệu user.
+Các file trong `.local/firebase-audit/` chỉ là audit/backup local, không phải managed export đầy đủ của Firebase và không chứa password hash/Auth credential. Khi restore profile, phải đối chiếu `updateTime` để không ghi đè thay đổi mới hơn.
 
 ## Kiểm tra local
-
-Cần Firebase CLI đã cài và Java phù hợp để chạy Emulator. Script Auth/Profile dùng tài khoản mới chỉ trong emulator, không cần mật khẩu tài khoản thật.
 
 ```sh
 firebase emulators:exec --only auth,firestore --project demo-memento-schema \
@@ -45,17 +48,11 @@ npm run test:emulator
 npm run test:storage-rules
 ```
 
-Test này xác minh Firebase Auth Emulator + payload profile + Rules; không thay cho test Android trên thiết bị thật.
+Các test này xác minh Auth/Profile, Functions, Firestore/Storage Rules và schema trong emulator; vẫn cần build/test Android riêng.
 
-## Baseline trước thay đổi ngày 13/09/2026
+## Deploy có chủ đích
 
-Auth có 3 tài khoản, Email/Password enabled. Firestore chỉ có `users` với 3 profile cũ (uid/username/email/createdAt, một profile có friendList); không thấy connection, request hoặc subcollection. Chưa có composite index. Firestore test-mode mở cho mọi người đến 14/09/2026; Storage deny-all.
-
-Snapshot Rules và backup profile lưu ở `.local/firebase-audit/`, chỉ dùng khôi phục local khi cần; không phải managed export đầy đủ Firebase. Không export password hash/Auth credential. Migration profile giữ document UID/username/createdAt, bỏ field công khai ngoài schema, thêm field còn thiếu và updatedAt server timestamp. Batch dùng updateTime precondition để không ghi đè thay đổi đồng thời.
-
-## Phát hành cấu hình
-
-Chỉ deploy sau khi dữ liệu profile đúng schema và test đạt. Không deploy tất cả dịch vụ vô tình.
+Chỉ deploy sau khi test đạt và đã kiểm tra project đích. Tách từng dịch vụ để tránh phát hành ngoài ý muốn:
 
 ```sh
 firebase deploy --only firestore:rules,firestore:indexes --project memento-fre
@@ -63,6 +60,4 @@ firebase deploy --only functions --project memento-fre
 firebase deploy --only storage --project memento-fre
 ```
 
-Storage đã mở đúng media path cho member ACTIVE; các path khác vẫn deny. Rules khóa client mutation connection/invite/post; direct invite và finalize post dùng Admin backend. Bước 5–6 cập nhật dần quyền đọc post/xóa phù hợp; không bật allow-all để thử app.
-
-Rollback Rules cần dùng snapshot đã kiểm tra; không tự quay lại test-mode mở cho mọi người. Backup profiles chỉ restore có đối chiếu updateTime, tránh ghi đè profile user đã sửa sau migration. Trạng thái phát hành thực tế được ghi ở [mvp-progress](mvp-progress.md).
+Sau deploy, đối chiếu danh sách Functions, Rules và indexes từ Firebase CLI/Console. Không rollback về Rules allow-all; rollback phải dùng bản Rules đã được kiểm tra.

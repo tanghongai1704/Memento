@@ -1,29 +1,41 @@
-# Kiến trúc hiện tại
+# Kiến trúc và luồng dữ liệu
 
-`app` quản lý navigation và binding Hilt. Mỗi feature có `presentation`, `domain`, `data`.
-`core/domain` chứa model Kotlin; `core/database` chứa Room v3; `core/network` cung cấp Firebase; `core/designsystem` chứa theme.
+`app` quản lý navigation và binding Hilt. Mỗi feature tách `presentation`, `domain`, `data`; `core/domain` chứa model dùng chung, `core/database` chứa Room v3, `core/network` cung cấp Firebase/network status, `core/media` xử lý media dùng chung, `core/ui` và `core/designsystem` phục vụ Compose.
 
-## Luồng dữ liệu
+## Auth và profile
 
-AuthRepository → Firebase Auth → transaction profile → UserDao. Login chỉ thành công sau khi profile sẵn sàng. ProfileViewModel cũng dùng AuthRepository để đọc/sửa profile; Firestore là nguồn xác nhận và Room được cập nhật sau khi remote thành công. ForgotPasswordViewModel gọi Firebase Auth qua cùng repository.
-ConnectionRepository → snapshot listener trên query Firestore có membership → transaction Room cập nhật connection/members. Profile của thành viên được đọc trực tiếp theo UID. Vì listener theo dõi query chứa `memberIds`, creator nhận connection mới ngay khi người khác redeem code mà không cần đăng nhập lại hoặc tự refresh.
-Các màn hình hiển thị connection DIRECT ghép membership ACTIVE với profile của người còn lại và dùng nhãn `displayName (@username)`; `connectionId` vẫn là khóa chọn/lọc. Khi dựng Connection từ Room phải truyền cả member entities, tránh mất quan hệ và rơi về nhãn chung `Direct connection`.
-Sau khi profile được tạo hoặc đồng bộ, AuthRepository gọi `getMyInviteCode` để đảm bảo user có một mã cố định; Profile hiển thị và cho share mã đó. Redeem đi từ ConnectionRepository tới Callable Functions ở `asia-southeast1`. Functions dùng Admin SDK và Firestore transaction để đọc lookup, tạo connection, hai member và unique lock; Android không có quyền ghi trực tiếp các document này. Nhập lại code của một cặp đã connect trả về connection cũ, không tạo trùng.
-HomeRepository/HistoryRepository → Room, không truy vấn Firestore từ Compose. Home lọc theo connectionId. PostDao hỗ trợ All/My/Received, loại media và khoảng thời gian.
-PostRepository → Room PENDING/FAILED/SYNCED + xử lý JPEG local → Firebase Storage → Callable `finalizePhotoPost`. Callable đọc metadata object thật rồi dùng Firestore transaction tạo Post và cập nhật `connection.lastPostAt`; Android không tự ghi Post remote. Retry giữ nguyên postId/mediaId/path nên không nhân đôi bài. Home người gửi render file trong cache local; downloader cho người nhận được bổ sung ở bước 5.
+`AuthRepository` gọi Firebase Auth, đồng bộ `users/{uid}` bằng transaction rồi cache profile vào Room. Login chỉ hoàn tất khi profile sẵn sàng, trừ lỗi mạng khi đúng UID đã có cache hợp lệ. Profile cho phép sửa display name, username và bio; forgot password dùng Firebase Auth.
 
-Room query kiểm tra cả connection ACTIVE lẫn membership ACTIVE của tài khoản hiện tại. Đồng bộ connection đánh dấu membership local LEFT khi không còn xuất hiện ở truy vấn server. Room connection dùng Upsert để không vô tình cascade-delete members như INSERT OR REPLACE.
+Sau khi profile sẵn sàng, repository gọi `getMyInviteCode`. Backend lưu mã cố định trong collection private và chỉ trả raw code cho chính chủ.
 
-`LocalMediaItem` chỉ dùng picker/nén với URI local. `MediaItem` là metadata persisted, dùng Storage path, không mang bitmap/Base64. Post dùng connectionId và postType PHOTO/VIDEO.
+## Connection
 
-## Giới hạn của giai đoạn này
+`ConnectionRepository` query các connection ACTIVE có UID trong `memberIds`, tải member/profile rồi cập nhật `connections`, `connection_members` và `users` trong Room transaction. Snapshot listener giúp hai phía nhận thay đổi mà không cần đăng nhập lại.
 
-Chưa có worker/realtime listener/pagination đồng bộ posts, nên Home/History chỉ hiển thị dữ liệu đã nằm trong Room. Thu hồi quyền offline chỉ có hiệu lực sau đồng bộ; chưa có TTL cache riêng.
-History UI hiện vẫn hiển thị danh sách chuỗi từ post thật; bộ lọc đã có ở DAO nhưng chưa có UI đầy đủ.
-Direct code đã có backend và UI. Code được backend lưu trong collection private để Profile có thể hiển thị lại sau khi mở app; client khác không được đọc/list collection này. Code cố định, không expire và không revoke. GROUP invite chưa triển khai.
-Pipeline gửi một ảnh đã hoạt động. Chưa có listener/pagination/download post phía người nhận; Home/History chỉ hiển thị các Post đã có trong Room của tài khoản đó. Cleanup orphan Storage chưa tự động.
+`redeemDirectInvite` chạy trong Callable Function tại `asia-southeast1`. Backend kiểm tra profile, chặn self-connect, dùng `directConnectionLocks` để chống trùng và tạo connection cùng hai member trong một transaction. Nhập lại mã của một cặp đang kết nối trả connection cũ.
 
-## Migration
+`disconnectDirect` đóng connection, xóa `memberIds`, chuyển hai membership sang LEFT và giải phóng lock. Android cập nhật Room và xóa cache media của connection.
 
-Room v2 → v3 giữ users và membership, bỏ email public cache và bảng request cũ, thêm metadata schema và bảng posts/media_items. Connections legacy được giữ dưới CLOSED cho đến khi dữ liệu remote được chuyển đổi và sync lại. Không dùng destructive fallback. Database v1 chưa có migration được kiểm chứng; không tự xóa dữ liệu khi gặp phiên bản không hỗ trợ.
-Firestore không tự migrate khi tăng Room version; xem [data-schema](data-schema.md).
+## Post ảnh
+
+Create Post chọn một connection ACTIVE và 1–5 ảnh. `PhotoProcessor` sửa EXIF, giới hạn cạnh dài 1.920 px và nén mỗi file JPEG không quá 5 MiB. Repository tạo `postId`/`mediaId` một lần, lưu Room PENDING rồi upload tuần tự lên Storage.
+
+Callable `finalizePhotoPost` xác minh metadata object thật và dùng Firestore transaction để tạo Post, cập nhật `connection.lastPostAt`. Retry giữ nguyên ID, path và nội dung nên idempotent; lỗi được giữ ở trạng thái FAILED để khôi phục sau khi mở lại app.
+
+## Feed, History và offline
+
+`HomeRepository` theo dõi connection ACTIVE. Với mỗi connection, nó listen trang 20 post mới nhất và một query tombstone DELETED, upsert metadata vào Room, tải ảnh về cache riêng rồi phát feed từ Room. Pagination có cursor riêng cho từng connection; Home lọc All hoặc theo connection.
+
+`HistoryRepository` hiện chỉ đọc các post ACTIVE mà UID hiện tại còn membership ACTIVE. DAO đã hỗ trợ filter theo tác giả, loại post và thời gian, nhưng History UI chưa expose các bộ lọc đó.
+
+Room là nguồn hiển thị cho Home/History. Splash có thể dùng profile cache khi Firebase lỗi mạng và session vẫn thuộc đúng UID. Cache media có giới hạn 200 MiB, nhưng chưa có TTL; quyền remote bị thu hồi ngay khi disconnect còn bản sao người dùng đã lưu ngoài app không thể bị thu hồi.
+
+## Xóa và cleanup
+
+Tác giả gọi `softDeletePost`; backend đánh dấu DELETED thay vì xóa document. Listener tombstone gỡ bài và cache trên các thiết bị. Scheduled Function `cleanupExpiredMedia` dọn đúng Storage path của app sau grace period; metadata Firestore vẫn được giữ.
+
+## Giới hạn
+
+GROUP và VIDEO có enum/schema dự phòng nhưng chưa có flow sản phẩm. Chưa có avatar upload, History filter đầy đủ hoặc retry upload nền bằng WorkManager. Room chỉ có migration đã kiểm chứng từ v2 lên v3; không dùng destructive fallback cho database cũ không được hỗ trợ.
+
+Chi tiết trường dữ liệu ở [data-schema](data-schema.md), lifecycle ảnh ở [photo-post-lifecycle](photo-post-lifecycle.md), và bản đồ code ở [code-review-guide](code-review-guide.md).
