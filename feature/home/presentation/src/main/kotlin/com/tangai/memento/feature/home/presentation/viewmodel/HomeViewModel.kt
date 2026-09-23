@@ -33,13 +33,29 @@ class HomeViewModel @Inject constructor(
                 result.onSuccess { users ->
                     val connections = homeRepository.loadConnections()
                         .getOrDefault(_uiState.value.connections)
+                    // A remote disconnect can invalidate the Firestore post listeners before they
+                    // can emit their final snapshot. Reloading from Room after connection
+                    // reconciliation removes posts whose membership has just been revoked.
+                    val posts = homeRepository.loadPosts()
+                        .getOrDefault(_uiState.value.posts)
                     val usersById = users.associateBy(User::id)
                     val current = _uiState.value
+                    val activeConnectionIds = connections.mapTo(mutableSetOf()) { it.id }
+                    val selectedFilter = (current.selectedFilter as? FeedFilter.Connection)
+                        ?.takeIf { it.connectionId in activeConnectionIds }
+                        ?: FeedFilter.All
                     _uiState.value = current.copy(
+                        posts = posts,
                         connections = connections,
                         connectionLabels = connections.associate {
                             connection -> connection.id to connection.displayLabel(usersById)
-                        }
+                        },
+                        authorLabels = loadAuthorLabels(posts),
+                        selectedFilter = selectedFilter,
+                        connectionIdsWithMore = current.connectionIdsWithMore
+                            .intersect(activeConnectionIds),
+                        mediaCacheRevision = current.mediaCacheRevision + 1,
+                        errorMessage = null
                     )
                 }.onFailure { error ->
                     _uiState.value = _uiState.value.copy(errorMessage = error.message)

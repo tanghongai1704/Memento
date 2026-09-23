@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.delay
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -84,6 +86,15 @@ class ConnectionRepositoryImpl @Inject constructor(
             .map {
                 loadConnections().getOrThrow().map(User::id).distinct()
             }
+            // Closing a connection revokes both members' read access immediately. Firestore can
+            // therefore end the listener with PERMISSION_DENIED instead of delivering a REMOVED
+            // change. Reconcile with a fresh query before restarting the listener so the member
+            // who did not initiate the disconnect also loses the cached connection right away.
+            .retryWhen { _, _ ->
+                emit(loadConnections().getOrThrow().map(User::id).distinct())
+                delay(CONNECTION_LISTENER_RETRY_DELAY_MS)
+                true
+            }
             .flatMapLatest { userIds ->
                 if (userIds.isEmpty()) {
                     flowOf(Result.success(emptyList()))
@@ -108,5 +119,9 @@ class ConnectionRepositoryImpl @Inject constructor(
     private fun clearConnectionMediaCache(connectionId: String) {
         if (!connectionId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) return
         File(context.filesDir, "pending_media/$connectionId").deleteRecursively()
+    }
+
+    private companion object {
+        const val CONNECTION_LISTENER_RETRY_DELAY_MS = 1_000L
     }
 }
