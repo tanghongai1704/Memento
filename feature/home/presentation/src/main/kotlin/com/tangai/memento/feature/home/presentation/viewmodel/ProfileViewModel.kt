@@ -15,6 +15,7 @@ data class ProfileUiState(
     val user: User? = null,
     val email: String = "",
     val inviteCode: String = "",
+    val inviteCodeError: String? = null,
     val displayName: String = "",
     val username: String = "",
     val bio: String = "",
@@ -24,6 +25,7 @@ data class ProfileUiState(
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val isLoading: Boolean = true,
+    val isLoadingInviteCode: Boolean = false,
     val isSaving: Boolean = false
 ) {
     val hasChanges: Boolean
@@ -54,14 +56,12 @@ class ProfileViewModel @Inject constructor(
                 return@launch
             }
             showUser(profile)
-            val inviteCode = repository.getCurrentUserInviteCode().getOrElse { error ->
-                state.value = state.value.copy(
-                    errorMessage = error.message ?: "Could not load invite code."
-                )
-                return@launch
-            }
-            state.value = state.value.copy(inviteCode = inviteCode)
+            loadInviteCode()
         }
+    }
+
+    fun retryInviteCode() {
+        viewModelScope.launch { loadInviteCode() }
     }
 
     fun onDisplayNameChanged(value: String) {
@@ -77,6 +77,21 @@ class ProfileViewModel @Inject constructor(
     fun onBioChanged(value: String) {
         state.value = state.value.copy(bio = value, bioError = null,
             errorMessage = null, successMessage = null)
+    }
+
+    fun discardChanges() {
+        val current = state.value
+        val user = current.user ?: return
+        state.value = current.copy(
+            displayName = user.displayName,
+            username = user.username,
+            bio = user.bio.orEmpty(),
+            displayNameError = null,
+            usernameError = null,
+            bioError = null,
+            errorMessage = null,
+            successMessage = null
+        )
     }
 
     fun saveProfile() {
@@ -110,15 +125,40 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    private suspend fun loadInviteCode() {
+        state.value = state.value.copy(
+            isLoadingInviteCode = true,
+            inviteCodeError = null
+        )
+        repository.getCurrentUserInviteCode().fold(
+            onSuccess = { inviteCode ->
+                state.value = state.value.copy(
+                    inviteCode = inviteCode,
+                    inviteCodeError = null,
+                    isLoadingInviteCode = false
+                )
+            },
+            onFailure = {
+                state.value = state.value.copy(
+                    inviteCodeError = "Couldn’t load your invite code. Please try again.",
+                    isLoadingInviteCode = false
+                )
+            }
+        )
+    }
+
     private fun showUser(user: User, successMessage: String? = null, inviteCode: String = state.value.inviteCode) {
+        val current = state.value
         state.value = ProfileUiState(
             user = user,
             email = repository.currentUserEmail().orEmpty(),
             inviteCode = inviteCode,
+            inviteCodeError = current.inviteCodeError,
             displayName = user.displayName,
             username = user.username,
             bio = user.bio.orEmpty(),
             successMessage = successMessage,
+            isLoadingInviteCode = current.isLoadingInviteCode,
             isLoading = false
         )
     }

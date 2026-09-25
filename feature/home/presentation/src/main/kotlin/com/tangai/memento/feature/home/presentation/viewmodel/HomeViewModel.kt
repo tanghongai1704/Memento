@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.tangai.memento.domain.model.Post
 import com.tangai.memento.domain.model.User
-import com.tangai.memento.domain.model.displayLabel
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.domain.HomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,10 +46,9 @@ class HomeViewModel @Inject constructor(
                     _uiState.value = current.copy(
                         posts = posts,
                         connections = connections,
-                        connectionLabels = connections.associate {
-                            connection -> connection.id to connection.displayLabel(usersById)
-                        },
-                        authorLabels = loadAuthorLabels(posts),
+                        connectionLabels = connectionLabels(connections, usersById),
+                        connectionUsers = connectionUsers(connections, usersById),
+                        authorProfiles = loadAuthorProfiles(posts),
                         selectedFilter = selectedFilter,
                         connectionIdsWithMore = current.connectionIdsWithMore
                             .intersect(activeConnectionIds),
@@ -65,10 +63,10 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             homeRepository.observePosts().collect { result ->
                 result.onSuccess { page ->
-                    val authorLabels = loadAuthorLabels(page.posts)
+                    val authorProfiles = loadAuthorProfiles(page.posts)
                     _uiState.value = _uiState.value.copy(
                         posts = page.posts,
-                        authorLabels = authorLabels,
+                        authorProfiles = authorProfiles,
                         mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         isLoading = false,
                         connectionIdsWithMore = page.connectionIdsWithMore,
@@ -97,13 +95,18 @@ class HomeViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             posts = posts,
             connections = connections,
-            connectionLabels = connections.associate { it.id to it.displayLabel(connectedUsersById) },
-            authorLabels = loadAuthorLabels(posts),
+            connectionLabels = connectionLabels(connections, connectedUsersById),
+            connectionUsers = connectionUsers(connections, connectedUsersById),
+            authorProfiles = loadAuthorProfiles(posts),
             isLoading = false,
             errorMessage = postsResult.exceptionOrNull()?.message
                 ?: connectionsResult.exceptionOrNull()?.message
                 ?: connectedUsersResult.exceptionOrNull()?.message
         )
+    }
+
+    fun refresh() {
+        viewModelScope.launch { loadHomeData() }
     }
 
     fun onFilterSelected(filter: FeedFilter) {
@@ -119,7 +122,7 @@ class HomeViewModel @Inject constructor(
                 .onSuccess { page ->
                     _uiState.value = _uiState.value.copy(
                         posts = page.posts,
-                        authorLabels = loadAuthorLabels(page.posts),
+                        authorProfiles = loadAuthorProfiles(page.posts),
                         mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         isLoadingMore = false,
                         connectionIdsWithMore = page.connectionIdsWithMore,
@@ -153,7 +156,7 @@ class HomeViewModel @Inject constructor(
                     )
                     _uiState.value = _uiState.value.copy(
                         posts = posts,
-                        authorLabels = loadAuthorLabels(posts),
+                        authorProfiles = loadAuthorProfiles(posts),
                         deletingPostKeys = _uiState.value.deletingPostKeys - postKey,
                         mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         errorMessage = null
@@ -172,13 +175,36 @@ class HomeViewModel @Inject constructor(
         return homeRepository.getFilteredPosts(_uiState.value.posts, _uiState.value.selectedFilter)
     }
 
-    fun getPostLabel(post: Post): String =
-        _uiState.value.authorLabels[post.authorId] ?: "Unknown author"
+    fun getPostAuthor(post: Post): User? = _uiState.value.authorProfiles[post.authorId]
 
-    private suspend fun loadAuthorLabels(posts: List<Post>): Map<String, String> =
+    private suspend fun loadAuthorProfiles(posts: List<Post>): Map<String, User> =
         homeRepository.loadUsers(posts.mapTo(mutableSetOf(), Post::authorId))
             .getOrDefault(emptyList())
-            .associate { user -> user.id to "${user.displayName} (@${user.username})" }
+            .associateBy(User::id)
+
+    private fun connectionLabels(
+        connections: List<com.tangai.memento.domain.model.Connection>,
+        usersById: Map<String, User>
+    ): Map<String, String> = connections.associate { connection ->
+        val connectedUser = connection.members.asSequence()
+            .mapNotNull { usersById[it.userId] }
+            .firstOrNull()
+        connection.id to (
+            connection.name?.takeIf(String::isNotBlank)
+                ?: connectedUser?.displayName
+                ?: "Direct connection"
+            )
+    }
+
+    private fun connectionUsers(
+        connections: List<com.tangai.memento.domain.model.Connection>,
+        usersById: Map<String, User>
+    ): Map<String, User> = connections.mapNotNull { connection ->
+        connection.members.asSequence()
+            .mapNotNull { usersById[it.userId] }
+            .firstOrNull()
+            ?.let { connection.id to it }
+    }.toMap()
 
     private fun Post.key(): String = "$connectionId:$id"
 }

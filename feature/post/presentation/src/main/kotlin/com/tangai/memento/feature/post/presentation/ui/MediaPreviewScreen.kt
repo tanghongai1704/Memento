@@ -12,11 +12,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,17 +39,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.domain.model.MediaType
 import com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel
 import java.util.Locale
 import com.tangai.memento.domain.model.LayoutType
 import com.tangai.memento.ui.PhotoLayout
+import com.tangai.memento.ui.MementoSectionTitle
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun MediaPreviewScreen(
     onNavigateBack: () -> Unit,
     onNavigateToHome: () -> Unit,
@@ -50,41 +67,50 @@ fun MediaPreviewScreen(
             title = { Text("Discard pending photo?") },
             text = { Text("The local draft will be removed. An unfinished server upload is cleaned up after the safety window.") },
             confirmButton = {
-                Button(onClick = {
-                    confirmDiscard = false
-                    viewModel.discardPendingPhoto()
-                }) { Text("Discard") }
+                TextButton(
+                    onClick = {
+                        confirmDiscard = false
+                        viewModel.discardPendingPhoto()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) { Text("Discard") }
             },
             dismissButton = {
-                Button(onClick = { confirmDiscard = false }) { Text("Keep") }
+                TextButton(onClick = { confirmDiscard = false }) { Text("Keep") }
             }
         )
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Preview") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    titleContentColor = MaterialTheme.colorScheme.primary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.primary
+                ),
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(16.dp)
+                .padding(innerPadding)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            Text(
-                text = "Preview",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-            )
-
             PhotoLayout(
                 media = uiState.selectedMedia.map { it.thumbnailUri ?: it.uri },
                 layoutType = uiState.selectedLayout,
@@ -94,14 +120,20 @@ fun MediaPreviewScreen(
             )
 
             if (uiState.selectedMedia.size > 1 && uiState.pendingPhoto == null) {
-                Text("Layout", style = MaterialTheme.typography.titleSmall)
+                MementoSectionTitle(text = "Layout")
                 Row {
-                    listOf(LayoutType.GRID, LayoutType.COLLAGE, LayoutType.CAROUSEL).forEach { layout ->
-                        Button(
+                    val layoutChoices = if (uiState.selectedMedia.size >= 5) {
+                        listOf(LayoutType.GRID, LayoutType.CAROUSEL)
+                    } else {
+                        listOf(LayoutType.GRID, LayoutType.COLLAGE, LayoutType.CAROUSEL)
+                    }
+                    layoutChoices.forEach { layout ->
+                        FilterChip(
                             onClick = { viewModel.onLayoutSelected(layout) },
-                            enabled = uiState.selectedLayout != layout,
+                            selected = uiState.selectedLayout == layout,
+                            label = { Text(layout.name.lowercase().replaceFirstChar(Char::uppercase)) },
                             modifier = Modifier.padding(4.dp)
-                        ) { Text(layout.name.lowercase().replaceFirstChar(Char::uppercase)) }
+                        )
                     }
                 }
             }
@@ -109,7 +141,7 @@ fun MediaPreviewScreen(
             if (previewMedia != null) {
                 Text(
                     text = "${uiState.selectedMedia.size} photo(s) · ready to post",
-                    fontSize = 16.sp,
+                    style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(top = 8.dp)
                 )
                 val originalSize = uiState.selectedMedia.sumOf { it.originalSizeBytes }
@@ -137,9 +169,20 @@ fun MediaPreviewScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = "Share with: ${uiState.selectedRecipient?.let(uiState::labelFor) ?: "No connection"}",
-                fontSize = 16.sp
+            ListItem(
+                overlineContent = {
+                    Text(
+                        "Sharing with",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                headlineContent = {
+                    Text(uiState.selectedRecipient?.let(uiState::labelFor) ?: "No connection")
+                },
+                colors = ListItemDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
             )
 
             OutlinedTextField(
@@ -154,20 +197,21 @@ fun MediaPreviewScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (uiState.isProcessing) {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(uiState.processingMessage)
-                Text("${(uiState.processingProgress * 100).toInt()}%")
+                ProgressStatus(
+                    progress = uiState.processingProgress,
+                    label = uiState.processingMessage
+                )
             } else if (uiState.isUploading) {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Uploading media...")
-                Text("${(uiState.uploadProgress * 100).toInt()}%")
+                ProgressStatus(
+                    progress = uiState.uploadProgress,
+                    label = "Uploading media…"
+                )
             } else if (uiState.selectedMedia.isNotEmpty()) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Button(
+                    OutlinedButton(
                         onClick = {
                             if (uiState.pendingPhoto == null) {
                                 viewModel.clearSelectedMedia()
@@ -177,7 +221,7 @@ fun MediaPreviewScreen(
                             }
                         },
                         enabled = previewMedia != null,
-                        modifier = Modifier.padding(8.dp)
+                        modifier = Modifier.weight(1f).padding(4.dp)
                     ) {
                         Text(if (uiState.pendingPhoto == null) "Change photos" else "Discard draft")
                     }
@@ -188,31 +232,59 @@ fun MediaPreviewScreen(
                                 onNavigateToHome()
                             }
                         },
-                        modifier = Modifier.padding(8.dp)
+                        modifier = Modifier.weight(1f).padding(4.dp)
                     ) {
                         Text(if (uiState.pendingPhoto == null) "Post photos" else "Retry upload")
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = onNavigateBack,
-                modifier = Modifier.padding(8.dp)
-            ) {
-                Text("Back")
-            }
-
             if (uiState.errorMessage != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = uiState.errorMessage ?: "",
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = uiState.errorMessage ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun ProgressStatus(progress: Float, label: String) {
+    val safeProgress = progress.coerceIn(0f, 1f)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "${(safeProgress * 100).toInt()}%",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        LinearProgressIndicator(
+            progress = { safeProgress },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        )
     }
 }
 

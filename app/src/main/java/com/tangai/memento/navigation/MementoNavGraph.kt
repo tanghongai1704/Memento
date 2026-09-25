@@ -1,15 +1,9 @@
 package com.tangai.memento.navigation
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.History
@@ -17,22 +11,18 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Text
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.composable
@@ -53,9 +43,13 @@ import com.tangai.memento.feature.home.presentation.ui.ProfileScreen
 import com.tangai.memento.feature.post.presentation.ui.CreatePostScreen
 import com.tangai.memento.feature.post.presentation.ui.MediaPickerScreen
 import com.tangai.memento.feature.post.presentation.ui.MediaPreviewScreen
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
-fun MementoNavGraph() {
+fun MementoNavGraph(
+    darkTheme: Boolean,
+    onDarkThemeChanged: (Boolean) -> Unit
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -66,122 +60,76 @@ fun MementoNavGraph() {
         MementoRoute.Profile.route
     )
     val navItems = listOf(
-        MementoRoute.Home to Icons.Filled.Home,
-        MementoRoute.Connection to Icons.Filled.People,
-        MementoRoute.History to Icons.Filled.History,
-        MementoRoute.Profile to Icons.Filled.Person
+        Triple(MementoRoute.Home, Icons.Filled.Home, "Home"),
+        Triple(MementoRoute.Connection, Icons.Filled.People, "Connections"),
+        Triple(MementoRoute.History, Icons.Filled.History, "History"),
+        Triple(MementoRoute.Profile, Icons.Filled.Person, "Profile")
     )
 
-    MementoTheme {
+    DisposableEffect(navController) {
+        val auth = FirebaseAuth.getInstance()
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            val route = navController.currentDestination?.route
+            val protectedRoutes = setOf(
+                MementoRoute.Home.route,
+                MementoRoute.Connection.route,
+                MementoRoute.History.route,
+                MementoRoute.Profile.route,
+                MementoRoute.CreatePost.route,
+                MementoRoute.MediaPicker.route,
+                MementoRoute.MediaPreview.route
+            )
+            if (firebaseAuth.currentUser == null && route in protectedRoutes) {
+                navController.navigate(MementoRoute.Login.route) {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
+
+    MementoTheme(darkTheme = darkTheme) {
         Scaffold(
             contentWindowInsets = WindowInsets.safeDrawing,
+            floatingActionButton = {
+                if (showBottomBar) {
+                    FloatingActionButton(
+                        onClick = { navController.navigate(MementoRoute.CreatePost.route) },
+                        shape = CircleShape,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "Create moment")
+                    }
+                }
+            },
             bottomBar = {
                 if (showBottomBar) {
-                    Surface(
-                        shape = RoundedCornerShape(30.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                        tonalElevation = 2.dp,
-                        shadowElevation = 10.dp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            FilledIconButton(
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                        navItems.forEach { (route, icon, label) ->
+                            val selected = backStackEntry?.destination?.hierarchy
+                                ?.any { it.route == route.route } == true
+                            NavigationBarItem(
+                                selected = selected,
                                 onClick = {
-                                    navController.navigate(MementoRoute.Home.route) {
+                                    navController.navigate(route.route) {
                                         popUpTo(MementoRoute.Home.route) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
                                 },
-                                modifier = Modifier.size(46.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = if (currentRoute == MementoRoute.Home.route) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (currentRoute == MementoRoute.Home.route) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                icon = { Icon(icon, contentDescription = label) },
+                                label = { Text(label) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Home,
-                                    contentDescription = "Home"
-                                )
-                            }
-                            FilledIconButton(
-                                onClick = {
-                                    navController.navigate(MementoRoute.Connection.route) {
-                                        popUpTo(MementoRoute.Home.route) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                modifier = Modifier.size(46.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = if (currentRoute == MementoRoute.Connection.route) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (currentRoute == MementoRoute.Connection.route) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.People,
-                                    contentDescription = "Connections"
-                                )
-                            }
-                            FloatingActionButton(
-                                onClick = {
-                                    navController.navigate(MementoRoute.CreatePost.route)
-                                },
-                                shape = CircleShape,
-                                containerColor = MaterialTheme.colorScheme.primary
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Add,
-                                    contentDescription = "Create Post",
-                                    tint = Color.White
-                                )
-                            }
-                            FilledIconButton(
-                                onClick = {
-                                    navController.navigate(MementoRoute.History.route) {
-                                        popUpTo(MementoRoute.Home.route) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                modifier = Modifier.size(46.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = if (currentRoute == MementoRoute.History.route) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (currentRoute == MementoRoute.History.route) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.History,
-                                    contentDescription = "History"
-                                )
-                            }
-                            FilledIconButton(
-                                onClick = {
-                                    navController.navigate(MementoRoute.Profile.route) {
-                                        popUpTo(MementoRoute.Home.route) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                modifier = Modifier.size(46.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = if (currentRoute == MementoRoute.Profile.route) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (currentRoute == MementoRoute.Profile.route) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Person,
-                                    contentDescription = "Profile"
-                                )
-                            }
+                            )
                         }
                     }
                 }
@@ -258,6 +206,8 @@ fun MementoNavGraph() {
                         }
                     }
                     HomeScreen(
+                        onCreateMoment = { navController.navigate(MementoRoute.CreatePost.route) },
+                        onOpenConnections = { navController.navigate(MementoRoute.Connection.route) }
                     )
                 }
 
@@ -283,6 +233,8 @@ fun MementoNavGraph() {
                         }
                     }
                     ProfileScreen(
+                        isDarkTheme = darkTheme,
+                        onDarkThemeChanged = onDarkThemeChanged,
                         onLogout = { logoutViewModel.logout() }
                     )
                 }
@@ -296,6 +248,11 @@ fun MementoNavGraph() {
                         },
                         onNavigateToPreview = {
                             navController.navigate(MementoRoute.MediaPreview.route)
+                        },
+                        onNavigateToConnections = {
+                            navController.navigate(MementoRoute.Connection.route) {
+                                popUpTo(MementoRoute.Home.route) { saveState = true }
+                            }
                         },
                         onNavigateBack = {
                             navController.popBackStack()

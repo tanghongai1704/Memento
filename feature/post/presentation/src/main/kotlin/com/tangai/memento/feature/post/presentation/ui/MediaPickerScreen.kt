@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,10 +22,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -39,9 +50,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.domain.model.LocalMediaItem
 import com.tangai.memento.domain.model.MediaType
 import com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel
+import com.tangai.memento.ui.MementoSectionTitle
 import coil3.compose.AsyncImage
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun MediaPickerScreen(
     onNavigateToPreview: () -> Unit,
     onNavigateBack: () -> Unit,
@@ -66,42 +79,64 @@ fun MediaPickerScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Select photos") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    titleContentColor = MaterialTheme.colorScheme.primary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.primary
+                ),
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .padding(innerPadding)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Text(
-                text = "Select up to 5 photos",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary,
+                text = "Choose up to 5 photos to share in one private moment.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
             )
 
-            Button(
-                onClick = { photoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                modifier = Modifier.padding(8.dp)
-            ) {
-                Text(if (uiState.selectedMedia.isEmpty()) "Choose photos" else "Change selection")
+            if (uiState.selectedMedia.isEmpty()) {
+                Button(
+                    onClick = { photoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Choose photos")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { photoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Change selection")
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             if (uiState.selectedMedia.isNotEmpty()) {
-                Text(
+                MementoSectionTitle(
                     text = "${uiState.selectedMedia.size} photo(s) selected",
-                    style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 LazyRow(
@@ -114,8 +149,8 @@ fun MediaPickerScreen(
                         Box(
                             modifier = Modifier
                                 .size(110.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+                                .clip(MaterialTheme.shapes.small)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.small)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable { onNavigateToPreview() },
                             contentAlignment = Alignment.Center
@@ -126,17 +161,21 @@ fun MediaPickerScreen(
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
-                            Row(
+                            Surface(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(4.dp),
-                                horizontalArrangement = Arrangement.End
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.errorContainer
                             ) {
-                                Button(
-                                    onClick = { viewModel.removeSelectedMedia(media.uri) },
-                                    modifier = Modifier.height(28.dp)
+                                IconButton(
+                                    onClick = { viewModel.removeSelectedMedia(media.uri) }
                                 ) {
-                                    Text("x")
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = "Remove ${media.displayName}",
+                                        tint = MaterialTheme.colorScheme.onErrorContainer
+                                    )
                                 }
                             }
                         }
@@ -149,16 +188,9 @@ fun MediaPickerScreen(
             Button(
                 onClick = onNavigateToPreview,
                 enabled = uiState.selectedMedia.isNotEmpty(),
-                modifier = Modifier.padding(8.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Preview")
-            }
-
-            Button(
-                onClick = onNavigateBack,
-                modifier = Modifier.padding(8.dp)
-            ) {
-                Text("Back")
             }
         }
     }

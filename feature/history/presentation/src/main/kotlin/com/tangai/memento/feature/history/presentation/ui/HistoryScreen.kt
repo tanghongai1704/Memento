@@ -5,12 +5,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PhotoAlbum
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -30,6 +34,8 @@ import java.io.File
 import java.text.DateFormat
 import java.util.Date
 import com.tangai.memento.ui.PhotoLayout
+import com.tangai.memento.ui.MementoScreenHeader
+import com.tangai.memento.ui.MementoSectionTitle
 
 @Composable
 fun HistoryScreen(
@@ -45,23 +51,10 @@ fun HistoryScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            Text(
-                text = "History",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp),
-            )
-            Text(
-                text = "Your recent private moments",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp)
+            MementoScreenHeader(
+                title = "History",
+                subtitle = "Your recent private moments",
+                modifier = Modifier.padding(bottom = 20.dp)
             )
 
             when (uiState) {
@@ -72,7 +65,7 @@ fun HistoryScreen(
                             .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Loading...")
+                        CircularProgressIndicator()
                     }
                 }
 
@@ -91,14 +84,21 @@ fun HistoryScreen(
                                     .background(MaterialTheme.colorScheme.primaryContainer),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "✓",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                Icon(
+                                    Icons.Outlined.PhotoAlbum,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                             Spacer(modifier = Modifier.height(14.dp))
-                            Text("No moments yet.", style = MaterialTheme.typography.titleMedium)
+                            Text("No moments yet", style = MaterialTheme.typography.titleMedium)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "Moments you share and receive will be collected here.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -112,7 +112,17 @@ fun HistoryScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Error: $message", color = MaterialTheme.colorScheme.error)
+                            Icon(
+                                Icons.Outlined.CloudOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                message,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
                             Spacer(modifier = Modifier.height(12.dp))
                             Button(onClick = viewModel::loadHistory) { Text("Retry") }
                         }
@@ -121,14 +131,31 @@ fun HistoryScreen(
 
                 is UiState.Success -> {
                     val moments = (uiState as UiState.Success<List<Post>>).data
+                    val momentsByDay = remember(moments) {
+                        moments.groupBy { moment ->
+                            DateFormat.getDateInstance(DateFormat.LONG)
+                                .format(Date(moment.createdAt ?: moment.clientCreatedAt))
+                        }
+                    }
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(moments, key = { "${it.connectionId}:${it.id}" }) { moment ->
-                            HistoryMomentCard(moment)
+                        momentsByDay.forEach { (day, dayMoments) ->
+                            item(key = "day-$day") {
+                                MementoSectionTitle(
+                                    text = day,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+                                )
+                            }
+                            items(
+                                items = dayMoments,
+                                key = { "${it.connectionId}:${it.id}" }
+                            ) { moment ->
+                                HistoryMomentCard(moment)
+                            }
                         }
                     }
                 }
@@ -148,7 +175,7 @@ private fun HistoryMomentCard(post: Post) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -161,9 +188,9 @@ private fun HistoryMomentCard(post: Post) {
                 height = 180.dp
             )
             Spacer(modifier = Modifier.height(10.dp))
-            post.caption?.let { Text(it, style = MaterialTheme.typography.bodyLarge) }
+            post.caption?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             Text(
-                text = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                text = DateFormat.getTimeInstance(DateFormat.SHORT)
                     .format(Date(sharedAt)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

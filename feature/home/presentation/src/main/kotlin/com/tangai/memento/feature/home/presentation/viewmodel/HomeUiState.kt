@@ -2,13 +2,15 @@ package com.tangai.memento.feature.home.presentation.viewmodel
 
 import com.tangai.memento.domain.model.Post
 import com.tangai.memento.domain.model.Connection
+import com.tangai.memento.domain.model.User
 import com.tangai.memento.feature.home.domain.FeedFilter
 
 data class HomeUiState(
     val posts: List<Post> = emptyList(),
     val connections: List<Connection> = emptyList(),
     val connectionLabels: Map<String, String> = emptyMap(),
-    val authorLabels: Map<String, String> = emptyMap(),
+    val connectionUsers: Map<String, User> = emptyMap(),
+    val authorProfiles: Map<String, User> = emptyMap(),
     val selectedFilter: FeedFilter = FeedFilter.All,
     val mediaCacheRevision: Long = 0,
     val isLoading: Boolean = false,
