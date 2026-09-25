@@ -7,10 +7,12 @@ import com.tangai.memento.domain.model.MediaType
 import com.tangai.memento.domain.model.Post
 import com.tangai.memento.domain.model.Connection
 import com.tangai.memento.domain.model.LayoutType
+import com.tangai.memento.domain.model.User
 import com.tangai.memento.domain.model.displayLabel
 import com.tangai.memento.feature.post.domain.PostRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,10 +24,45 @@ class CreatePostViewModel @Inject constructor(
     private val connectionRepository: com.tangai.memento.feature.connection.domain.ConnectionRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CreatePostUiState())
+    private var loadRecipientsJob: Job? = null
+
     init {
+        loadCreatePostData()
         viewModelScope.launch {
+            connectionRepository.observeConnections().collect { result ->
+                result.onSuccess { users ->
+                    val usersById = users.associateBy { it.id }
+                    val current = _uiState.value
+                    _uiState.value = current.copy(
+                        recipientLabels = current.recipients.associate { connection ->
+                            connection.id to connection.displayLabel(usersById)
+                        },
+                        recipientUsers = connectionUsers(current.recipients, usersById)
+                    )
+                }
+            }
+        }
+    }
+
+    val uiState: StateFlow<CreatePostUiState> = _uiState.asStateFlow()
+
+    fun retryLoadingConnections() {
+        loadCreatePostData()
+    }
+
+    private fun loadCreatePostData() {
+        loadRecipientsJob?.cancel()
+        loadRecipientsJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val result = connectionRepository.getCurrentUserConnections()
-            val recipients = result.getOrDefault(emptyList())
+            val recipients = result.getOrElse { error ->
+                _uiState.value = _uiState.value.copy(
+                    recipients = emptyList(),
+                    isLoading = false,
+                    errorMessage = error.message ?: "Could not load your connections."
+                )
+                return@launch
+            }
             val connectedUsers = if (recipients.isEmpty()) {
                 emptyList()
             } else {
@@ -38,6 +75,7 @@ class CreatePostViewModel @Inject constructor(
                 recipientLabels = recipients.associate { connection ->
                     connection.id to connection.displayLabel(connectedUsersById)
                 },
+                recipientUsers = connectionUsers(recipients, connectedUsersById),
                 selectedRecipient = pending?.post?.connectionId?.let { id -> recipients.find { it.id == id } },
                 selectedMedia = pending?.localUris?.mapIndexed { index, uri ->
                         LocalMediaItem(
@@ -50,25 +88,11 @@ class CreatePostViewModel @Inject constructor(
                 selectedLayout = pending?.post?.layoutType ?: LayoutType.SINGLE,
                 caption = pending?.post?.caption.orEmpty(),
                 pendingPhoto = pending,
-                errorMessage = result.exceptionOrNull()?.message
+                isLoading = false,
+                errorMessage = null
             )
         }
-        viewModelScope.launch {
-            connectionRepository.observeConnections().collect { result ->
-                result.onSuccess { users ->
-                    val usersById = users.associateBy { it.id }
-                    val current = _uiState.value
-                    _uiState.value = current.copy(
-                        recipientLabels = current.recipients.associate { connection ->
-                            connection.id to connection.displayLabel(usersById)
-                        }
-                    )
-                }
-            }
-        }
     }
-
-    val uiState: StateFlow<CreatePostUiState> = _uiState.asStateFlow()
 
     fun onRecipientSelected(user: Connection) {
         _uiState.value = _uiState.value.copy(
@@ -221,5 +245,16 @@ class CreatePostViewModel @Inject constructor(
     private companion object {
         const val MAX_PHOTOS_PER_POST = 5
     }
+
+    private fun connectionUsers(
+        connections: List<Connection>,
+        usersById: Map<String, User>
+    ): Map<String, User> = connections.mapNotNull { connection ->
+        connection.members
+            .asSequence()
+            .mapNotNull { member -> usersById[member.userId] }
+            .firstOrNull()
+            ?.let { user -> connection.id to user }
+    }.toMap()
 
 }

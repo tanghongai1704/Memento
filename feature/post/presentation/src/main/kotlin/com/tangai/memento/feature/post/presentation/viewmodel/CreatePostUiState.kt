@@ -3,17 +3,19 @@ package com.tangai.memento.feature.post.presentation.viewmodel
 import com.tangai.memento.domain.model.LocalMediaItem
 import com.tangai.memento.domain.model.Connection
 import com.tangai.memento.domain.model.LayoutType
+import com.tangai.memento.domain.model.User
 import com.tangai.memento.feature.post.domain.PendingPhotoPost
 
 data class CreatePostUiState(
     val recipients: List<Connection> = emptyList(),
     val recipientLabels: Map<String, String> = emptyMap(),
+    val recipientUsers: Map<String, User> = emptyMap(),
     val selectedRecipient: Connection? = null,
     val selectedMedia: List<LocalMediaItem> = emptyList(),
     val selectedLayout: LayoutType = LayoutType.SINGLE,
     val caption: String = "",
     val pendingPhoto: PendingPhotoPost? = null,
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val isProcessing: Boolean = false,
     val isUploading: Boolean = false,
     val processingProgress: Float = 0f,
@@ -25,4 +27,6 @@ data class CreatePostUiState(
     fun labelFor(connection: Connection): String = recipientLabels[connection.id]
         ?: connection.name?.takeIf { it.isNotBlank() }
         ?: "Direct connection"
+
+    fun userFor(connection: Connection): User? = recipientUsers[connection.id]
 }
