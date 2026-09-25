@@ -43,13 +43,16 @@ class ConnectionViewModel @Inject constructor(
     init { auth.addAuthStateListener(listener) }
     fun onRedeemCodeChanged(value: String) {
         val normalized = value.uppercase(Locale.ROOT).filter { it.isLetterOrDigit() }.take(8)
-        val formatted = if (normalized.length > 4) normalized.take(4) + "-" + normalized.drop(4) else normalized
-        state.value = state.value.copy(redeemCode = formatted, errorMessage = null, successMessage = null)
+        state.value = state.value.copy(
+            redeemCode = normalized,
+            errorMessage = null,
+            successMessage = null
+        )
     }
     fun redeemInvite() {
         val uid = auth.currentUser?.uid ?: return
         val code = state.value.redeemCode
-        if (code.replace("-", "").length != 8) {
+        if (code.length != 8) {
             state.value = state.value.copy(errorMessage = "Enter the complete 8-character invite code.")
             return
         }

@@ -1,6 +1,7 @@
 package com.tangai.memento.feature.connection.presentation.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,6 +12,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -77,13 +83,17 @@ fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
                     onValueChange = viewModel::onRedeemCodeChanged,
                     label = { Text("Invite code") },
                     placeholder = { Text("XXXX-XXXX") },
+                    visualTransformation = InviteCodeVisualTransformation,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Characters
+                    ),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium
                 )
                 Button(
                     onClick = viewModel::redeemInvite,
-                    enabled = !state.isRedeemRunning && state.redeemCode.replace("-", "").length == 8,
+                    enabled = !state.isRedeemRunning && state.redeemCode.length == 8,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (state.isRedeemRunning) "Connecting…" else "Connect")
@@ -202,4 +212,23 @@ fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
             }
         }
     }
+}
+
+private val InviteCodeVisualTransformation = VisualTransformation { text ->
+    val rawCode = text.text.take(8)
+    val displayedCode = if (rawCode.length > 4) {
+        rawCode.take(4) + "-" + rawCode.drop(4)
+    } else {
+        rawCode
+    }
+    TransformedText(
+        text = AnnotatedString(displayedCode),
+        offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int =
+                if (offset <= 4) offset else offset + 1
+
+            override fun transformedToOriginal(offset: Int): Int =
+                if (offset <= 4) offset else offset - 1
+        }
+    )
 }
