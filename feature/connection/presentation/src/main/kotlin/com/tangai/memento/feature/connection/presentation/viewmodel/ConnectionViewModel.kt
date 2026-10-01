@@ -3,8 +3,7 @@ package com.tangai.memento.feature.connection.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
-import com.tangai.memento.domain.model.MemberStatus
-import com.tangai.memento.domain.model.User
+import com.tangai.memento.feature.connection.domain.CachedConnectionUsers
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -28,10 +27,25 @@ class ConnectionViewModel @Inject constructor(
         state.value = ConnectionUiState()
         val uid = it.currentUser?.uid
         if (uid != null) connectionObservationJob = viewModelScope.launch {
-            state.value = state.value.copy(isLoading = true)
+            val cached = repository.loadCachedConnectionUsers().getOrNull()
+            if (auth.currentUser?.uid != uid) return@launch
+            cached?.let(::showConnections)
+            state.value = state.value.copy(isLoading = cached == null || cached.users.isEmpty())
+
             repository.observeConnections().collectLatest { result ->
                 if (auth.currentUser?.uid == uid) {
-                    result.onSuccess { users -> updateConnectedUsers(uid, users) }
+                    result.onSuccess { users ->
+                        val refreshedCache = repository.loadCachedConnectionUsers().getOrNull()
+                        if (refreshedCache != null) {
+                            showConnections(refreshedCache)
+                        } else {
+                            state.value = state.value.copy(
+                                connectedUsers = users,
+                                isLoading = false,
+                                errorMessage = null
+                            )
+                        }
+                    }
                         .onFailure { error -> state.value = state.value.copy(
                             isLoading = false,
                             errorMessage = error.userMessage()
@@ -60,11 +74,8 @@ class ConnectionViewModel @Inject constructor(
             state.value = state.value.copy(isRedeemRunning = true, errorMessage = null, successMessage = null)
             val result = repository.redeemDirectInvite(code)
             if (auth.currentUser?.uid == uid) {
-                val users = if (result.isSuccess) repository.loadConnections().getOrDefault(state.value.connectedUsers)
-                    else state.value.connectedUsers
-                if (result.isSuccess) updateConnectedUsers(uid, users)
                 state.value = state.value.copy(
-                    redeemCode = if (result.isSuccess) "" else code, connectedUsers = users,
+                    redeemCode = if (result.isSuccess) "" else code,
                     isRedeemRunning = false,
                     successMessage = if (result.isSuccess) "Connected successfully." else null,
                     errorMessage = result.exceptionOrNull()?.userMessage()
@@ -114,24 +125,10 @@ class ConnectionViewModel @Inject constructor(
         }
     }
 
-    private suspend fun updateConnectedUsers(uid: String, users: List<User>) {
-        val connectionsResult = repository.getCurrentUserConnections()
-        val connections = connectionsResult.getOrElse { error ->
-            state.value = state.value.copy(
-                connectedUsers = users,
-                isLoading = false,
-                errorMessage = error.userMessage()
-            )
-            return
-        }
-        val connectionIds = connections.mapNotNull { connection ->
-            connection.members.firstOrNull {
-                it.userId != uid && it.status == MemberStatus.ACTIVE
-            }?.userId?.let { otherUid -> otherUid to connection.id }
-        }.toMap()
+    private fun showConnections(cached: CachedConnectionUsers) {
         state.value = state.value.copy(
-            connectedUsers = users,
-            connectionIdsByUserId = connectionIds,
+            connectedUsers = cached.users,
+            connectionIdsByUserId = cached.connectionIdsByUserId,
             isLoading = false,
             errorMessage = null
         )

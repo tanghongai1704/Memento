@@ -7,6 +7,7 @@ import com.tangai.memento.database.MementoDatabase
 import com.tangai.memento.database.model.toDomain
 import com.tangai.memento.database.model.toEntity
 import com.tangai.memento.domain.model.*
+import com.tangai.memento.feature.connection.domain.CachedConnectionUsers
 import com.tangai.memento.feature.connection.data.source.ConnectionFirestoreDataSource
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,11 +30,7 @@ class ConnectionRepositoryImpl @Inject constructor(
     private val source: ConnectionFirestoreDataSource
 ) : ConnectionRepository {
     override suspend fun redeemDirectInvite(code: String): Result<String> = runCatching {
-        val connectionId = source.redeemDirectInvite(code)
-        // The backend transaction has already committed. A cache refresh failure must not
-        // make the UI report that redeem failed and encourage reuse of a consumed code.
-        getCurrentUserConnections()
-        connectionId
+        source.redeemDirectInvite(code)
     }
 
     override suspend fun disconnectDirect(connectionId: String): Result<Unit> = runCatching {
@@ -80,6 +77,41 @@ class ConnectionRepositoryImpl @Inject constructor(
             }
     }
 
+    override suspend fun loadCachedConnectionUsers(): Result<CachedConnectionUsers> = runCatching {
+        val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
+        val cachedRows = database.connectionMemberDao()
+            .getActiveMembershipsForUser(uid)
+            .mapNotNull { membership ->
+                val connection = database.connectionDao()
+                    .getConnectionById(membership.connectionId)
+                    ?.takeIf { it.status == ConnectionStatus.ACTIVE }
+                    ?: return@mapNotNull null
+                val otherMember = database.connectionMemberDao()
+                    .getMembersByConnectionId(connection.id)
+                    .firstOrNull { it.userId != uid && it.status == MemberStatus.ACTIVE }
+                    ?: return@mapNotNull null
+                val user = database.userDao().getUserById(otherMember.userId)?.toDomain()
+                    ?: return@mapNotNull null
+                CachedConnectionRow(
+                    user = user,
+                    connectionId = connection.id,
+                    lastPostAt = connection.lastPostAt,
+                    createdAt = connection.createdAt
+                )
+            }
+            .sortedWith(
+                compareByDescending<CachedConnectionRow> { it.lastPostAt != null }
+                    .thenByDescending { it.lastPostAt ?: Long.MIN_VALUE }
+                    .thenByDescending(CachedConnectionRow::createdAt)
+            )
+            .distinctBy { it.user.id }
+
+        CachedConnectionUsers(
+            users = cachedRows.map(CachedConnectionRow::user),
+            connectionIdsByUserId = cachedRows.associate { it.user.id to it.connectionId }
+        )
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeConnections(): Flow<Result<List<User>>> =
         source.observeCurrentUserConnectionChanges()
@@ -124,4 +156,11 @@ class ConnectionRepositoryImpl @Inject constructor(
     private companion object {
         const val CONNECTION_LISTENER_RETRY_DELAY_MS = 1_000L
     }
+
+    private data class CachedConnectionRow(
+        val user: User,
+        val connectionId: String,
+        val lastPostAt: Long?,
+        val createdAt: Long
+    )
 }
