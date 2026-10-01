@@ -229,6 +229,12 @@ class HomeRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun loadCachedUsers(userIds: Set<String>): Result<List<User>> = runCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
+        userIds.mapNotNull { database.userDao().getUserById(it)?.toDomain() }
+            .also { check(auth.currentUser?.uid == uid) }
+    }
+
     private suspend fun storePost(
         connectionId: String,
         document: DocumentSnapshot
@@ -336,8 +342,12 @@ class HomeRepositoryImpl @Inject constructor(
             }
     }
     override suspend fun loadConnections(): Result<List<Connection>> = runCatching {
-        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         connections.getCurrentUserConnections().getOrThrow()
+        loadCachedConnections().getOrThrow()
+    }
+
+    override suspend fun loadCachedConnections(): Result<List<Connection>> = runCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         database.connectionMemberDao().getActiveMembershipsForUser(uid).mapNotNull { member ->
             database.connectionDao().getConnectionById(member.connectionId)
                 ?.takeIf { it.status == ConnectionStatus.ACTIVE }
@@ -347,9 +357,15 @@ class HomeRepositoryImpl @Inject constructor(
                             .map { it.toDomain() }
                     )
                 }
-        }.sortedByDescending { it.lastPostAt }.also { check(auth.currentUser?.uid == uid) }
+        }.sortedWith(
+            compareByDescending<Connection> { it.lastPostAt != null }
+                .thenByDescending { it.lastPostAt ?: Long.MIN_VALUE }
+                .thenByDescending(Connection::createdAt)
+        ).also { check(auth.currentUser?.uid == uid) }
     }
     override suspend fun loadConnectedUsers(): Result<List<User>> = connections.loadConnections()
+    override suspend fun loadCachedConnectedUsers(): Result<List<User>> =
+        connections.loadCachedConnectionUsers().map { it.users }
     override fun observeConnectedUsers() = connections.observeConnections()
 
     override fun getFilteredPosts(posts: List<Post>, filter: FeedFilter): List<Post> =

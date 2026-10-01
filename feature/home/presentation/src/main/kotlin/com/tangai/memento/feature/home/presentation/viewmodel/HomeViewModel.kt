@@ -8,6 +8,7 @@ import com.tangai.memento.domain.model.User
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.domain.HomeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,17 +21,23 @@ class HomeViewModel @Inject constructor(
     private val homeRepository: HomeRepository,
     private val auth: FirebaseAuth
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(HomeUiState())
+    private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val cachedHomeDataLoaded = CompletableDeferred<Unit>()
 
     init {
         viewModelScope.launch {
-            loadHomeData()
+            try {
+                loadCachedHomeData()
+            } finally {
+                cachedHomeDataLoaded.complete(Unit)
+            }
         }
         viewModelScope.launch {
+            cachedHomeDataLoaded.await()
             homeRepository.observeConnectedUsers().collect { result ->
                 result.onSuccess { users ->
-                    val connections = homeRepository.loadConnections()
+                    val connections = homeRepository.loadCachedConnections()
                         .getOrDefault(_uiState.value.connections)
                     // A remote disconnect can invalidate the Firestore post listeners before they
                     // can emit their final snapshot. Reloading from Room after connection
@@ -48,7 +55,7 @@ class HomeViewModel @Inject constructor(
                         connections = connections,
                         connectionLabels = connectionLabels(connections, usersById),
                         connectionUsers = connectionUsers(connections, usersById),
-                        authorProfiles = loadAuthorProfiles(posts),
+                        authorProfiles = loadCachedAuthorProfiles(posts),
                         selectedFilter = selectedFilter,
                         connectionIdsWithMore = current.connectionIdsWithMore
                             .intersect(activeConnectionIds),
@@ -61,6 +68,7 @@ class HomeViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            cachedHomeDataLoaded.await()
             homeRepository.observePosts().collect { result ->
                 result.onSuccess { page ->
                     val authorProfiles = loadAuthorProfiles(page.posts)
@@ -82,12 +90,10 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadHomeData() {
-        _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
-        val connectionsResult = homeRepository.loadConnections()
+    private suspend fun loadCachedHomeData() {
         val postsResult = homeRepository.loadPosts()
-        val connectedUsersResult = homeRepository.loadConnectedUsers()
+        val connectionsResult = homeRepository.loadCachedConnections()
+        val connectedUsersResult = homeRepository.loadCachedConnectedUsers()
         val connections = connectionsResult.getOrElse { emptyList() }
         val posts = postsResult.getOrElse { emptyList() }
         val connectedUsersById = connectedUsersResult.getOrElse { emptyList() }.associateBy { it.id }
@@ -97,7 +103,7 @@ class HomeViewModel @Inject constructor(
             connections = connections,
             connectionLabels = connectionLabels(connections, connectedUsersById),
             connectionUsers = connectionUsers(connections, connectedUsersById),
-            authorProfiles = loadAuthorProfiles(posts),
+            authorProfiles = loadCachedAuthorProfiles(posts),
             isLoading = false,
             errorMessage = postsResult.exceptionOrNull()?.message
                 ?: connectionsResult.exceptionOrNull()?.message
@@ -106,7 +112,22 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh() {
-        viewModelScope.launch { loadHomeData() }
+        viewModelScope.launch {
+            val hasCachedContent = _uiState.value.posts.isNotEmpty() ||
+                _uiState.value.connections.isNotEmpty()
+            _uiState.value = _uiState.value.copy(
+                isLoading = !hasCachedContent,
+                errorMessage = null
+            )
+            homeRepository.loadConnectedUsers()
+                .onSuccess { loadCachedHomeData() }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Could not sync your moments."
+                    )
+                }
+        }
     }
 
     fun onFilterSelected(filter: FeedFilter) {
@@ -179,6 +200,11 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadAuthorProfiles(posts: List<Post>): Map<String, User> =
         homeRepository.loadUsers(posts.mapTo(mutableSetOf(), Post::authorId))
+            .getOrDefault(emptyList())
+            .associateBy(User::id)
+
+    private suspend fun loadCachedAuthorProfiles(posts: List<Post>): Map<String, User> =
+        homeRepository.loadCachedUsers(posts.mapTo(mutableSetOf(), Post::authorId))
             .getOrDefault(emptyList())
             .associateBy(User::id)
 
