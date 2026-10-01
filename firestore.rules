@@ -42,9 +42,15 @@ service cloud.firestore {
         allow write: if false;
       }
       match /posts/{postId} {
+        // Keep scoped connection reads available for detail/recovery flows.
         allow read: if activeMember(connectionId);
         allow write: if false; // Posts are finalized only by the trusted Callable backend.
       }
+    }
+    // Collection-group feed queries are authorized by the audience snapshot on
+    // each post. The query must include memberIds array-contains request.auth.uid.
+    match /{path=**}/posts/{postId} {
+      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
     }
     match /invites/{codeHash} {
       // Raw codes are resolved only by the Callable backend. Clients cannot probe hashes.

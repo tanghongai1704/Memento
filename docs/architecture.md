@@ -28,11 +28,11 @@ Sau khi profile sẵn sàng, repository gọi `getMyInviteCode`. Backend lưu m�
 
 Create Post chọn một connection ACTIVE và 1–5 ảnh. `PhotoProcessor` sửa EXIF, giới hạn cạnh dài 1.920 px và nén mỗi file JPEG không quá 5 MiB. Repository tạo `postId`/`mediaId` một lần, lưu Room PENDING rồi upload tuần tự lên Storage.
 
-Callable `finalizePhotoPost` xác minh metadata object thật và dùng Firestore transaction để tạo Post, cập nhật `connection.lastPostAt`. Retry giữ nguyên ID, path và nội dung nên idempotent; lỗi được giữ ở trạng thái FAILED để khôi phục sau khi mở lại app.
+Callable `finalizePhotoPost` xác minh metadata object thật và dùng Firestore transaction để tạo Post, sao chép `memberIds` từ connection làm audience/query index, rồi cập nhật `connection.lastPostAt`. Retry giữ nguyên ID, path và nội dung nên idempotent; lỗi được giữ ở trạng thái FAILED để khôi phục sau khi mở lại app.
 
 ## Feed và offline
 
-`HomeRepository` theo dõi connection ACTIVE. Với mỗi connection, nó listen trang 20 post mới nhất và một query tombstone DELETED, upsert metadata vào Room, tải ảnh về cache riêng rồi phát feed từ Room. Pagination có cursor riêng cho từng connection; Home lọc All hoặc theo connection.
+`HomeRepository` dùng một collection-group listener lấy đúng 20 post ACTIVE mới nhất có `memberIds` chứa UID hiện tại, cùng một listener tombstone DELETED. Metadata được upsert vào Room, ảnh tải về cache riêng rồi feed phát từ Room. Feed All có một cursor toàn cục; filter connection bổ sung `connectionId` và có cursor riêng khi người dùng tải thêm.
 
 Room là nguồn hiển thị cho Home. Splash có thể dùng profile cache khi Firebase lỗi mạng và session vẫn thuộc đúng UID. Cache media có giới hạn 200 MiB, nhưng chưa có TTL; quyền remote bị thu hồi ngay khi disconnect còn bản sao người dùng đã lưu ngoài app không thể bị thu hồi. DAO vẫn có thể hỗ trợ các bộ lọc nâng cao trực tiếp trong Home khi sản phẩm cần mở rộng.
 

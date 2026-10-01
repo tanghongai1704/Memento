@@ -6,7 +6,6 @@ import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FileDownloadTask
@@ -42,10 +41,11 @@ class HomeRepositoryImpl @Inject constructor(
     private val postSyncMutex = Mutex()
     private val paginationLock = Any()
     private var paginationUid: String? = null
-    private val activeConnectionIds = mutableSetOf<String>()
-    private val pageCursors = mutableMapOf<String, DocumentSnapshot>()
-    private val pageHasMore = mutableMapOf<String, Boolean>()
-    private val connectionsWithOlderPages = mutableSetOf<String>()
+    private var feedCursor: DocumentSnapshot? = null
+    private var feedHasMore = false
+    private var feedHasOlderPages = false
+    private val connectionCursors = mutableMapOf<String, DocumentSnapshot>()
+    private val connectionHasMore = mutableMapOf<String, Boolean>()
 
     override suspend fun loadPosts(): Result<List<Post>> = runCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
@@ -59,26 +59,22 @@ class HomeRepositoryImpl @Inject constructor(
             return@callbackFlow
         }
 
-        val postListeners = mutableMapOf<String, List<ListenerRegistration>>()
         synchronized(paginationLock) { resetPagination(uid) }
 
         fun syncSnapshot(
-            connectionId: String,
             documents: List<DocumentSnapshot>,
-            updatePagination: Boolean
+            updateFeedPagination: Boolean
         ) = launch {
             try {
                 check(auth.currentUser?.uid == uid) { "Account changed during post sync." }
-                if (updatePagination) synchronized(paginationLock) {
-                    if (paginationUid == uid && connectionId in activeConnectionIds &&
-                        connectionId !in connectionsWithOlderPages) {
-                        documents.lastOrNull()?.let { pageCursors[connectionId] = it }
-                            ?: pageCursors.remove(connectionId)
-                        pageHasMore[connectionId] = documents.size.toLong() == POST_PAGE_SIZE
+                if (updateFeedPagination) synchronized(paginationLock) {
+                    if (paginationUid == uid && !feedHasOlderPages) {
+                        feedCursor = documents.lastOrNull()
+                        feedHasMore = documents.size.toLong() == POST_PAGE_SIZE
                     }
                 }
                 val cacheError = postSyncMutex.withLock {
-                    val mediaToCache = syncDocumentMetadata(connectionId, documents)
+                    val mediaToCache = syncDocumentMetadata(documents)
                     // Room is the UI source: publish post metadata immediately, then let each
                     // photo keep its loading state while Storage fills the local cache.
                     trySend(Result.success(currentPage(uid)))
@@ -91,70 +87,35 @@ class HomeRepositoryImpl @Inject constructor(
             }
         }
 
-        fun listenToPosts(connectionId: String): List<ListenerRegistration> {
-            val feedListener = postsQuery(connectionId)
-                .limit(POST_PAGE_SIZE)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        trySend(Result.failure(error))
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null) syncSnapshot(connectionId, snapshot.documents, true)
-                }
-            val deletionListener = firestore.collection("connections")
-                .document(connectionId)
-                .collection("posts")
-                .whereEqualTo("status", PostStatus.DELETED.name)
-                .orderBy("updatedAt", Query.Direction.DESCENDING)
-                .limit(DELETED_POST_PAGE_SIZE)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        trySend(Result.failure(error))
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null) syncSnapshot(connectionId, snapshot.documents, false)
-                }
-            return listOf(feedListener, deletionListener)
-        }
-
-        val connectionListener = firestore.collection("connections")
+        val feedListener = firestore.collectionGroup("posts")
             .whereArrayContains("memberIds", uid)
-            .whereEqualTo("status", ConnectionStatus.ACTIVE.name)
-            .orderBy("lastPostAt", Query.Direction.DESCENDING)
+            .whereEqualTo("status", PostStatus.ACTIVE.name)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(POST_PAGE_SIZE)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     trySend(Result.failure(error))
                     return@addSnapshotListener
                 }
-                if (snapshot == null) return@addSnapshotListener
+                if (snapshot != null) syncSnapshot(snapshot.documents, true)
+            }
 
-                val activeIds = snapshot.documents.map(DocumentSnapshot::getId).toSet()
-                synchronized(paginationLock) {
-                    if (paginationUid != uid) resetPagination(uid)
-                    activeConnectionIds.retainAll(activeIds)
-                    activeConnectionIds.addAll(activeIds)
-                    pageCursors.keys.retainAll(activeIds)
-                    pageHasMore.keys.retainAll(activeIds)
-                    connectionsWithOlderPages.retainAll(activeIds)
+        val deletionListener = firestore.collectionGroup("posts")
+            .whereArrayContains("memberIds", uid)
+            .whereEqualTo("status", PostStatus.DELETED.name)
+            .orderBy("updatedAt", Query.Direction.DESCENDING)
+            .limit(DELETED_POST_PAGE_SIZE)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(Result.failure(error))
+                    return@addSnapshotListener
                 }
-                (postListeners.keys - activeIds).forEach { connectionId ->
-                    postListeners.remove(connectionId)?.forEach(ListenerRegistration::remove)
-                }
-                (activeIds - postListeners.keys).forEach { connectionId ->
-                    postListeners[connectionId] = listenToPosts(connectionId)
-                }
-                if (activeIds.isEmpty()) {
-                    launch {
-                        runCatching { currentPage(uid) }
-                            .also { trySend(it) }
-                    }
-                }
+                if (snapshot != null) syncSnapshot(snapshot.documents, false)
             }
 
         awaitClose {
-            connectionListener.remove()
-            postListeners.values.flatten().forEach(ListenerRegistration::remove)
-            postListeners.clear()
+            feedListener.remove()
+            deletionListener.remove()
             synchronized(paginationLock) {
                 if (paginationUid == uid) resetPagination(null)
             }
@@ -163,39 +124,39 @@ class HomeRepositoryImpl @Inject constructor(
 
     override suspend fun loadOlderPosts(connectionId: String?): Result<PostFeedPage> = runCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
-        val targets = synchronized(paginationLock) {
+        val target = synchronized(paginationLock) {
             if (paginationUid != uid) resetPagination(uid)
-            activeConnectionIds
-                .filter { connectionId == null || it == connectionId }
-                .mapNotNull { targetConnectionId ->
-                    val cursor = pageCursors[targetConnectionId]
-                    if (pageHasMore[targetConnectionId] == true && cursor != null) {
-                        PageTarget(targetConnectionId, cursor)
-                    } else {
-                        null
-                    }
+            if (connectionId == null) {
+                if (feedHasMore) PageTarget(null, feedCursor) else null
+            } else {
+                if (connectionHasMore[connectionId] != false) {
+                    PageTarget(connectionId, connectionCursors[connectionId])
+                } else {
+                    null
                 }
-        }
-
-        targets.forEach { target ->
-            check(auth.currentUser?.uid == uid) { "Account changed while loading older posts." }
-            val documents = postsQuery(target.connectionId)
-                .startAfter(target.cursor)
-                .limit(POST_PAGE_SIZE)
-                .get()
-                .awaitTask()
-                .documents
-
-            val cacheError = postSyncMutex.withLock {
-                cacheMediaItems(syncDocumentMetadata(target.connectionId, documents))
             }
-            cacheError?.let { throw it }
+        } ?: return@runCatching currentPage(uid)
 
-            synchronized(paginationLock) {
-                if (paginationUid == uid && target.connectionId in activeConnectionIds) {
-                    connectionsWithOlderPages += target.connectionId
-                    documents.lastOrNull()?.let { pageCursors[target.connectionId] = it }
-                    pageHasMore[target.connectionId] = documents.size.toLong() == POST_PAGE_SIZE
+        check(auth.currentUser?.uid == uid) { "Account changed while loading older posts." }
+        var query = activePostsQuery(uid, target.connectionId)
+        target.cursor?.let { query = query.startAfter(it) }
+        val documents = query.limit(POST_PAGE_SIZE).get().awaitTask().documents
+
+        val cacheError = postSyncMutex.withLock {
+            cacheMediaItems(syncDocumentMetadata(documents))
+        }
+        cacheError?.let { throw it }
+
+        synchronized(paginationLock) {
+            if (paginationUid == uid) {
+                if (target.connectionId == null) {
+                    feedHasOlderPages = true
+                    documents.lastOrNull()?.let { feedCursor = it }
+                    feedHasMore = documents.size.toLong() == POST_PAGE_SIZE
+                } else {
+                    documents.lastOrNull()?.let { connectionCursors[target.connectionId] = it }
+                    connectionHasMore[target.connectionId] =
+                        documents.size.toLong() == POST_PAGE_SIZE
                 }
             }
         }
@@ -252,12 +213,12 @@ class HomeRepositoryImpl @Inject constructor(
         return media
     }
 
-    private suspend fun syncDocumentMetadata(
-        connectionId: String,
-        documents: List<DocumentSnapshot>
-    ): List<MediaItemEntity> {
+    private suspend fun syncDocumentMetadata(documents: List<DocumentSnapshot>): List<MediaItemEntity> {
         val mediaToCache = mutableListOf<MediaItemEntity>()
         documents.forEach { document ->
+            val connectionId = requireNotNull(document.getString("connectionId")) {
+                "Post ${document.id} is missing connectionId."
+            }
             val status = PostStatus.valueOf(requireNotNull(document.getString("status")))
             val media = storePost(connectionId, document)
             if (status == PostStatus.DELETED) {
@@ -278,28 +239,43 @@ class HomeRepositoryImpl @Inject constructor(
         return firstCacheError
     }
 
-    private fun postsQuery(connectionId: String): Query = firestore.collection("connections")
-        .document(connectionId)
-        .collection("posts")
+    private fun activePostsQuery(uid: String, connectionId: String? = null): Query {
+        var query = firestore.collectionGroup("posts")
+            .whereArrayContains("memberIds", uid)
+            .whereEqualTo("status", PostStatus.ACTIVE.name)
+        connectionId?.let { query = query.whereEqualTo("connectionId", it) }
+        return query
         .orderBy("createdAt", Query.Direction.DESCENDING)
+    }
 
-    private suspend fun currentPage(uid: String): PostFeedPage = PostFeedPage(
-        posts = database.postDao().loadPosts(uid),
-        connectionIdsWithMore = synchronized(paginationLock) {
-            if (paginationUid == uid) {
-                activeConnectionIds.filterTo(mutableSetOf()) { pageHasMore[it] == true }
-            } else {
-                emptySet()
+    private suspend fun currentPage(uid: String): PostFeedPage {
+        val activeConnectionIds = database.connectionMemberDao()
+            .getActiveMembershipsForUser(uid)
+            .mapTo(mutableSetOf()) { it.connectionId }
+        return PostFeedPage(
+            posts = database.postDao().loadPosts(uid),
+            hasMorePosts = synchronized(paginationLock) {
+                paginationUid == uid && feedHasMore
+            },
+            connectionIdsWithMore = synchronized(paginationLock) {
+                if (paginationUid == uid) {
+                    activeConnectionIds.filterTo(mutableSetOf()) {
+                        connectionHasMore[it] != false
+                    }
+                } else {
+                    emptySet()
+                }
             }
-        }
-    )
+        )
+    }
 
     private fun resetPagination(uid: String?) {
         paginationUid = uid
-        activeConnectionIds.clear()
-        pageCursors.clear()
-        pageHasMore.clear()
-        connectionsWithOlderPages.clear()
+        feedCursor = null
+        feedHasMore = false
+        feedHasOlderPages = false
+        connectionCursors.clear()
+        connectionHasMore.clear()
     }
 
     private suspend fun cacheMedia(media: MediaItemEntity) {
@@ -484,8 +460,8 @@ class HomeRepositoryImpl @Inject constructor(
     }
 
     private data class PageTarget(
-        val connectionId: String,
-        val cursor: DocumentSnapshot
+        val connectionId: String?,
+        val cursor: DocumentSnapshot?
     )
 }
 

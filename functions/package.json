@@ -7,6 +7,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "backfill:post-members": "node scripts/backfill-post-member-ids.mjs",
     "create:test-users": "node scripts/create-test-users.mjs",
     "connect:test-users": "node scripts/connect-test-users.mjs",
     "test": "npm run build && node --test test/*.test.js",

@@ -77,10 +77,14 @@ call(':commit', 'ADMIN', {'writes': [
     {'update': {'name': name + '/connections/c/members/a', 'fields': {'status': {'stringValue': 'ACTIVE'}}}},
     {'update': {'name': name + '/connections/c/posts/p', 'fields': {
         'status': {'stringValue': 'ACTIVE'}, 'authorId': {'stringValue': 'a'},
+        'connectionId': {'stringValue': 'c'},
+        'memberIds': {'arrayValue': {'values': [{'stringValue': 'a'}]}},
         'createdAt': {'timestampValue': '2026-09-16T00:00:00Z'},
         'updatedAt': {'timestampValue': '2026-09-16T00:00:00Z'}}}},
     {'update': {'name': name + '/connections/c/posts/deleted', 'fields': {
         'status': {'stringValue': 'DELETED'}, 'authorId': {'stringValue': 'a'},
+        'connectionId': {'stringValue': 'c'},
+        'memberIds': {'arrayValue': {'values': [{'stringValue': 'a'}]}},
         'createdAt': {'timestampValue': '2026-09-15T00:00:00Z'},
         'updatedAt': {'timestampValue': '2026-09-17T00:00:00Z'}}}}
 ]})
@@ -102,6 +106,22 @@ call('/connections/c:runQuery', 'a', {'structuredQuery': {
     'where': {'fieldFilter': {'field': {'fieldPath': 'status'}, 'op': 'EQUAL',
         'value': {'stringValue': 'DELETED'}}},
     'orderBy': [{'field': {'fieldPath': 'updatedAt'}, 'direction': 'DESCENDING'}]}})
+call(':runQuery', 'a', {'structuredQuery': {
+    'from': [{'collectionId': 'posts', 'allDescendants': True}], 'limit': 20,
+    'where': {'compositeFilter': {'op': 'AND', 'filters': [
+        {'fieldFilter': {'field': {'fieldPath': 'memberIds'}, 'op': 'ARRAY_CONTAINS',
+            'value': {'stringValue': 'a'}}},
+        {'fieldFilter': {'field': {'fieldPath': 'status'}, 'op': 'EQUAL',
+            'value': {'stringValue': 'ACTIVE'}}}]}},
+    'orderBy': [{'field': {'fieldPath': 'createdAt'}, 'direction': 'DESCENDING'}]}})
+call(':runQuery', 'b', {'structuredQuery': {
+    'from': [{'collectionId': 'posts', 'allDescendants': True}], 'limit': 20,
+    'where': {'compositeFilter': {'op': 'AND', 'filters': [
+        {'fieldFilter': {'field': {'fieldPath': 'memberIds'}, 'op': 'ARRAY_CONTAINS',
+            'value': {'stringValue': 'a'}}},
+        {'fieldFilter': {'field': {'fieldPath': 'status'}, 'op': 'EQUAL',
+            'value': {'stringValue': 'ACTIVE'}}}]}},
+    'orderBy': [{'field': {'fieldPath': 'createdAt'}, 'direction': 'DESCENDING'}]}}, expected=403)
 call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'connections'}]}}, expected=403)
 call(':runQuery', 'a', {'structuredQuery': {'from': [{'collectionId': 'connections'}],
     'where': {'compositeFilter': {'op': 'AND', 'filters': [

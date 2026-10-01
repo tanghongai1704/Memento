@@ -93,6 +93,24 @@ class HomeUiStateTest {
         )
     }
 
+    @Test
+    fun `pagination availability follows the selected feed scope`() {
+        assertTrue(HomeUiState(hasMoreAllPosts = true).hasMorePosts)
+        assertFalse(HomeUiState(hasMoreAllPosts = false).hasMorePosts)
+        assertTrue(
+            HomeUiState(
+                selectedFilter = FeedFilter.Connection("connection-1"),
+                connectionIdsWithMore = setOf("connection-1")
+            ).hasMorePosts
+        )
+        assertFalse(
+            HomeUiState(
+                selectedFilter = FeedFilter.Connection("connection-2"),
+                connectionIdsWithMore = setOf("connection-1")
+            ).hasMorePosts
+        )
+    }
+
     private fun connection(
         id: String,
         createdAt: Long,

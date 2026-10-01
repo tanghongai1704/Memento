@@ -1,4 +1,4 @@
-import {Firestore, Timestamp} from "firebase-admin/firestore";
+import {FieldPath, Firestore, Timestamp} from "firebase-admin/firestore";
 import {ConnectionMutationInput, PostMutationInput} from "./lifecycleCore";
 import {
   ConnectionStatus,
@@ -59,7 +59,7 @@ export async function disconnectDirect(
 ): Promise<DisconnectResult> {
   const connectionRef = db.collection("connections").doc(input.connectionId);
 
-  return db.runTransaction(async (transaction): Promise<DisconnectResult> => {
+  const result = await db.runTransaction(async (transaction): Promise<DisconnectResult> => {
     const connection = await transaction.get(connectionRef);
     if (!connection.exists) return {ok: false, reason: "CONNECTION_NOT_FOUND"};
     if (connection.get("type") !== ConnectionType.DIRECT) return {ok: false, reason: "NOT_DIRECT"};
@@ -110,4 +110,29 @@ export async function disconnectDirect(
     }
     return {ok: true, updatedAtMillis: now.toMillis()};
   });
+
+  // The post audience is also the collection-group feed index. Clear it after
+  // closing the connection so disconnected users stop matching feed queries.
+  // Paginated batches avoid Firestore's per-batch write ceiling and make a
+  // retry safe if a previous cleanup stopped partway through.
+  if (result.ok) await revokePostAudience(db, input.connectionId);
+  return result;
+}
+
+async function revokePostAudience(db: Firestore, connectionId: string): Promise<void> {
+  const posts = db.collection("connections").doc(connectionId).collection("posts");
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+
+  while (true) {
+    let query = posts.orderBy(FieldPath.documentId()).limit(400);
+    if (cursor) query = query.startAfter(cursor);
+    const page = await query.get();
+    if (page.empty) return;
+
+    const batch = db.batch();
+    page.docs.forEach((post) => batch.update(post.ref, {memberIds: []}));
+    await batch.commit();
+    cursor = page.docs.at(-1);
+    if (page.size < 400) return;
+  }
 }

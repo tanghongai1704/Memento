@@ -32,17 +32,17 @@ Member ID = UID; không dùng collection root `connection_members` (tên bảng 
 
 ## connections/{connectionId}/posts/{postId}
 
-`connectionId`, `authorId`, `postType: PHOTO | VIDEO`, `layoutType: SINGLE | GRID | COLLAGE | CAROUSEL`, `caption: String?`, `mediaItems: List<Map>`, `clientCreatedAt: Number`, `createdAt: Timestamp`, `updatedAt: Timestamp`, `status: ACTIVE | DELETED`, `deletedAt: Timestamp?`, `deletedBy: UID?`, `schemaVersion: 1`.
+`connectionId`, `memberIds: List<UID>`, `authorId`, `postType: PHOTO | VIDEO`, `layoutType: SINGLE | GRID | COLLAGE | CAROUSEL`, `caption: String?`, `mediaItems: List<Map>`, `clientCreatedAt: Number`, `createdAt: Timestamp`, `updatedAt: Timestamp`, `status: ACTIVE | DELETED`, `deletedAt: Timestamp?`, `deletedBy: UID?`, `schemaVersion: 1`. Backend sao chép `memberIds` từ connection ACTIVE khi finalize; client không được tự đặt audience.
 
 Media map: `mediaId`, `mediaType: IMAGE | VIDEO`, `storagePath`, `thumbnailPath: String?`, `mimeType`, `width`, `height`, `durationMs: Number?`, `sizeBytes`, `position` (0-based). Media metadata phản ánh file sau nén; video cần thumbnail. LocalMediaItem chỉ là picker model, không serialize vào Firestore.
 
-Pagination đã triển khai theo từng connection: `createdAt DESC`, limit 20, `startAfter(lastDocument)`. Query trang có thể nhận cả ACTIVE và DELETED; Room chỉ hiển thị ACTIVE. Một listener DELETED riêng bảo đảm tombstone của bài cũ đã cache được đồng bộ. Mỗi connection giữ cursor và trạng thái còn trang riêng; các trang cũ đã upsert vào Room vẫn được giữ để tạo feed chung. Index queryScope COLLECTION dùng cho query posts dưới một connection; không nhầm với COLLECTION_GROUP query toàn bộ posts.
+Feed tổng dùng một collection-group query `memberIds ARRAY_CONTAINS uid`, `status == ACTIVE`, `createdAt DESC`, limit 20 và `startAfter(lastDocument)`. Firestore vì vậy sắp xếp và giới hạn trên toàn bộ connection trước khi trả dữ liệu, không mở 20 post cho từng connection. Khi lọc một connection, query bổ sung `connectionId == selectedId` và giữ cursor riêng. Một collection-group listener `DELETED` theo `updatedAt DESC` bảo đảm tombstone của bài cũ đã cache được đồng bộ. `memberIds` trên post là audience snapshot và cũng giúp Functions xử lý post mà không cần đọc lại connection.
 
 Tạo postId/mediaId trước upload; giữ nguyên khi retry. Luồng đã triển khai: Room PENDING → xử lý JPEG → Storage → Callable `finalizePhotoPost` → Firestore transaction set Post + update connection.lastPostAt/updatedAt bằng cùng server timestamp → Room SYNCED. Backend đọc object thật, kiểm tra `contentType`, byte size và custom metadata `authorId`; post đã tồn tại chỉ được coi là retry thành công khi dữ liệu bất biến khớp, nên không reset createdAt. Firestore không atomic với Storage: retry dùng lại object và scheduled cleanup xử lý orphan sau grace period. Soft delete metadata trước cleanup Storage.
 
 `softDeletePost(connectionId, postId)` chỉ cho member ACTIVE là tác giả gọi. Transaction đổi `status = DELETED`, ghi `deletedAt`, `deletedBy` và `updatedAt`; gọi lại cùng tác giả là idempotent. Client nghe thêm query `status == DELETED, updatedAt DESC, limit 20` để bài cũ đã tải cũng bị gỡ khỏi Room feed/cache dù không còn nằm trong trang 20 bài mới nhất. Composite index tương ứng có trong `firestore.indexes.json`.
 
-`disconnectDirect(connectionId)` chỉ áp dụng cho DIRECT và một trong hai member ACTIVE. Cùng transaction đổi connection sang `CLOSED`, xóa `memberIds`, chuyển cả hai member sang `LEFT` với `leftAt`, và đóng `directConnectionLocks/{directKey}`. Rules vì vậy thu hồi ngay quyền đọc connection/post/media. App cũng đổi membership local và xóa thư mục cache của connection; document lịch sử và Storage object được giữ cho scheduled cleanup. Kết nối lại tạo connection ID mới nên lịch sử cũ không tái xuất hiện.
+`disconnectDirect(connectionId)` chỉ áp dụng cho DIRECT và một trong hai member ACTIVE. Transaction đổi connection sang `CLOSED`, xóa `memberIds`, chuyển cả hai member sang `LEFT` với `leftAt`, và đóng `directConnectionLocks/{directKey}`. Sau đó backend dọn `memberIds` khỏi post theo các batch 400 document trước khi trả success, để chúng không còn khớp collection-group feed query; retry tiếp tục cleanup an toàn. Rules thu hồi ngay scoped read của connection/post/media, app đổi membership local và xóa cache. Kết nối lại tạo connection ID mới nên lịch sử cũ không tái xuất hiện.
 
 ## Retry, offline và cleanup
 
@@ -58,7 +58,7 @@ PostDao join posts/connections/membership theo current UID; filter All/connectio
 
 ## Chuyển dữ liệu remote cũ
 
-Với dữ liệu legacy, export/backup trước khi dùng Admin migration: chuyển users sang schema chuẩn và bỏ email; ánh xạ connection ID cũ sang Auto ID mới; chuyển root `connection_members` vào subcollection; tạo `memberIds` từ ACTIVE members; bổ sung `maxMembers`, `ownerId`, `directKey`, `lastPostAt`, `schemaVersion`; đổi ARCHIVED thành CLOSED; đổi milliseconds sang Timestamp. Chỉ xóa collection cũ sau khi đối soát. Việc user legacy tự được sửa khi đăng nhập không thay thế migration toàn bộ dữ liệu trước deploy.
+Với dữ liệu legacy, export/backup trước khi dùng Admin migration: chuyển users sang schema chuẩn và bỏ email; ánh xạ connection ID cũ sang Auto ID mới; chuyển root `connection_members` vào subcollection; tạo `memberIds` từ ACTIVE members; bổ sung `maxMembers`, `ownerId`, `directKey`, `lastPostAt`, `schemaVersion`; đổi ARCHIVED thành CLOSED; đổi milliseconds sang Timestamp. Trước khi bật collection-group feed cho dữ liệu đã có, chạy `npm run backfill:post-members` trong `functions` để dry-run, kiểm tra số lượng rồi thêm `-- --apply`; script sao chép member ACTIVE vào post và để post của connection CLOSED có audience rỗng. Chỉ xóa collection cũ sau khi đối soát.
 
 ## Rules và triển khai
 

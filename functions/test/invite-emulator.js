@@ -54,6 +54,7 @@ async function main() {
   assert.equal(published.ok, true);
   const post = await connection.ref.collection("posts").doc("post-photo").get();
   assert.equal(post.get("authorId"), "creator-a");
+  assert.deepEqual(post.get("memberIds"), connection.get("memberIds"));
   assert.equal(post.get("mediaItems").length, 1);
   assert.equal(post.get("clientCreatedAt"), 123456789);
   assert.equal((await connection.ref.get()).get("lastPostAt") instanceof Timestamp, true);
@@ -92,6 +93,10 @@ async function main() {
   assert.deepEqual(closed.get("memberIds"), []);
   const closedMembers = await connection.ref.collection("members").get();
   closedMembers.docs.forEach((member) => assert.equal(member.get("status"), "LEFT"));
+  assert.deepEqual(
+    (await connection.ref.collection("posts").doc("post-photo").get()).get("memberIds"),
+    [],
+  );
   assert.equal((await disconnectDirect(db, "creator-a", {connectionId: connection.id})).ok, true);
   const rejectedAfterDisconnect = await finalizePhotoPost(
     db, "creator-a", {...photoInput, postId: "after-disconnect"}, async () => true,

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 
 data class PostFeedPage(
     val posts: List<Post>,
+    val hasMorePosts: Boolean,
     val connectionIdsWithMore: Set<String>
 )
 

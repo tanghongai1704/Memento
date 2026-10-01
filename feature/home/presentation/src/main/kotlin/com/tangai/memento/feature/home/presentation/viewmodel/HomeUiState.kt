@@ -19,6 +19,7 @@ data class HomeUiState(
     val failedMediaPostKeys: Set<String> = emptySet(),
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
+    val hasMoreAllPosts: Boolean = false,
     val connectionIdsWithMore: Set<String> = emptySet(),
     val deletingPostKeys: Set<String> = emptySet(),
     val errorMessage: String? = null
@@ -48,7 +49,7 @@ data class HomeUiState(
 
     val hasMorePosts: Boolean
         get() = when (val filter = selectedFilter) {
-            FeedFilter.All -> connectionIdsWithMore.isNotEmpty()
+            FeedFilter.All -> hasMoreAllPosts
             is FeedFilter.Connection -> filter.connectionId in connectionIdsWithMore
         }
 

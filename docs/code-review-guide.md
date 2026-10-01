@@ -205,21 +205,19 @@ Feed đã có đồng bộ phía người nhận và cache offline.
 Flow:
 
 1. `HomeViewModel` khởi tạo ba luồng: load dữ liệu ban đầu, observe connected users và observe posts.
-2. `HomeRepositoryImpl.observePosts()` listen danh sách connection ACTIVE của UID.
-3. Với mỗi connection, repository gắn hai listener:
-   - feed mới nhất, giới hạn 20 post;
-   - các post đã `DELETED` để local nhận tombstone.
+2. `HomeRepositoryImpl.observePosts()` mở collection-group query `memberIds ARRAY_CONTAINS uid`, lấy đúng 20 post ACTIVE mới nhất trên toàn bộ connection.
+3. Repository gắn thêm một collection-group listener cho post `DELETED` để local nhận tombstone.
 4. Snapshot được parse thành `PostEntity` + `MediaItemEntity`, upsert Room trong transaction.
 5. Ảnh IMAGE được tải từ Storage vào private cache bằng file `.download`, kiểm tra size, rồi rename atomically.
 6. Repository đọc feed từ Room và phát `PostFeedPage`; ViewModel cập nhật `HomeUiState`.
 7. `HomeScreen` render All hoặc một connection qua `FeedFilter`.
-8. Khi load older, repository dùng cursor riêng cho từng connection, lấy thêm 20 post rồi merge vào Room.
+8. Khi load older, feed All dùng một cursor toàn cục; filter connection thêm `connectionId` và dùng cursor riêng, rồi merge kết quả vào Room.
 
 Đọc tại:
 
 - `HomeScreen.kt` — `HomeScreen`, `PostCard`, hành vi scroll/filter/delete
 - `HomeViewModel.kt` — `init`, `loadHomeData`, `onFilterSelected`, `loadOlderPosts`, `getFilteredPosts`
-- `HomeRepositoryImpl.kt` — `observePosts`, `listenToPosts`, `syncDocuments`, `cacheMedia`, `loadOlderPosts`, `currentPage`
+- `HomeRepositoryImpl.kt` — `observePosts`, `activePostsQuery`, `syncDocumentMetadata`, `cacheMedia`, `loadOlderPosts`, `currentPage`
 - `HomeRepository.kt` — `PostFeedPage`
 - `PostDao.kt` — `loadPosts` và mapper entity/domain
 

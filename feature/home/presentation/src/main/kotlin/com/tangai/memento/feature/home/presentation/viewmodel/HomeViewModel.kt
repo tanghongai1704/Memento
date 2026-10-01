@@ -48,6 +48,8 @@ class HomeViewModel @Inject constructor(
                         .getOrDefault(emptyList())
                         .associateBy(User::id)
                     val current = _uiState.value
+                    val previousActiveConnectionIds = current.connections
+                        .mapTo(mutableSetOf()) { it.id }
                     val activeConnectionIds = connections.mapTo(mutableSetOf()) { it.id }
                     val selectedFilter = (current.selectedFilter as? FeedFilter.Connection)
                         ?.takeIf { it.connectionId in activeConnectionIds }
@@ -59,8 +61,10 @@ class HomeViewModel @Inject constructor(
                         connectionUsers = connectionUsers(connections, usersById),
                         authorProfiles = loadCachedAuthorProfiles(posts),
                         selectedFilter = selectedFilter,
+                        hasMoreAllPosts = current.hasMoreAllPosts,
                         connectionIdsWithMore = current.connectionIdsWithMore
-                            .intersect(activeConnectionIds),
+                            .intersect(activeConnectionIds) +
+                            (activeConnectionIds - previousActiveConnectionIds),
                         mediaCacheRevision = current.mediaCacheRevision + 1,
                         errorMessage = null
                     )
@@ -80,6 +84,7 @@ class HomeViewModel @Inject constructor(
                         authorProfiles = authorProfiles,
                         mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         isLoading = false,
+                        hasMoreAllPosts = page.hasMorePosts,
                         connectionIdsWithMore = page.connectionIdsWithMore,
                         errorMessage = null
                     )
@@ -151,6 +156,7 @@ class HomeViewModel @Inject constructor(
                         authorProfiles = loadCachedAuthorProfiles(page.posts),
                         mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         isLoadingMore = false,
+                        hasMoreAllPosts = page.hasMorePosts,
                         connectionIdsWithMore = page.connectionIdsWithMore,
                         errorMessage = null
                     )

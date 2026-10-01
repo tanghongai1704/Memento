@@ -8,7 +8,7 @@ Tài liệu này là snapshot hiện trạng, không phải nhật ký theo đ�
 - Mã kết nối cố định, redeem DIRECT qua backend transaction, chống self-connect và connection trùng.
 - Realtime connection sync, nhãn người dùng, disconnect và thu hồi quyền remote.
 - Post PHOTO gồm 1–5 ảnh với bốn layout; xử lý JPEG, draft local, progress upload, finalize idempotent và retry sau process death.
-- Feed Room-first, realtime sync phía nhận, tải/cache media, phân trang 20 bài cho mỗi connection và filter All/từng connection.
+- Feed Room-first, một collection-group query lấy 20 bài mới nhất trên toàn bộ connection, tải/cache media, phân trang All/từng connection.
 - Soft delete có tombstone; cleanup Storage cho orphan/media đã xóa sau grace period.
 - Offline fallback cho profile/feed đã cache; cache media giới hạn dung lượng và có guard theo UID/membership.
 

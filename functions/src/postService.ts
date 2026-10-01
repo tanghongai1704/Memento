@@ -73,6 +73,10 @@ export async function finalizePhotoPost(
 
     transaction.create(postRef, {
       connectionId: input.connectionId,
+      // Keep the post self-contained for collection-group feed queries and
+      // downstream Functions. The trusted backend copies this from the
+      // connection instead of accepting audience data from the client.
+      memberIds,
       authorId: uid,
       postType: PostType.PHOTO,
       layoutType: input.layoutType,
