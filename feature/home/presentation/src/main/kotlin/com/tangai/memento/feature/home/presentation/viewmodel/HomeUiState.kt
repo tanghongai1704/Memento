@@ -19,6 +19,29 @@ data class HomeUiState(
     val deletingPostKeys: Set<String> = emptySet(),
     val errorMessage: String? = null
 ) {
+    val orderedConnections: List<Connection>
+        get() = connections.sortedWith(
+            compareByDescending<Connection> { it.lastPostAt != null }
+                .thenByDescending { it.lastPostAt ?: Long.MIN_VALUE }
+                .thenByDescending(Connection::createdAt)
+                .thenBy { labelFor(it).lowercase() }
+                .thenBy(Connection::id)
+        )
+
+    val suggestedConnections: List<Connection>
+        get() {
+            val recent = orderedConnections.take(HOME_SUGGESTION_LIMIT)
+            val selectedId = (selectedFilter as? FeedFilter.Connection)?.connectionId
+                ?: return recent
+            if (recent.any { it.id == selectedId }) return recent
+            val selected = orderedConnections.firstOrNull { it.id == selectedId }
+                ?: return recent
+            return recent + selected
+        }
+
+    val hasMoreConnections: Boolean
+        get() = connections.size > HOME_SUGGESTION_LIMIT
+
     val hasMorePosts: Boolean
         get() = when (val filter = selectedFilter) {
             FeedFilter.All -> connectionIdsWithMore.isNotEmpty()
@@ -29,3 +52,5 @@ data class HomeUiState(
         ?: connection.name?.takeIf { it.isNotBlank() }
         ?: "Direct connection"
 }
+
+private const val HOME_SUGGESTION_LIMIT = 5

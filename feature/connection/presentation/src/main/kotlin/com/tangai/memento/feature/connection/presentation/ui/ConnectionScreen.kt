@@ -26,7 +26,10 @@ import com.tangai.memento.ui.MementoScreenHeader
 import com.tangai.memento.ui.MementoSectionTitle
 
 @Composable
-fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
+fun ConnectionScreen(
+    onOpenConnectionFeed: (String) -> Unit,
+    viewModel: ConnectionViewModel = hiltViewModel()
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val disconnectTarget = state.connectedUsers.firstOrNull { it.id == state.disconnectTargetUserId }
 
@@ -156,7 +159,10 @@ fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(state.connectedUsers, key = { "connected-" + it.id }) { user ->
+                    val connectionId = state.connectionIdsByUserId[user.id]
                     Card(
+                        onClick = { connectionId?.let(onOpenConnectionFeed) },
+                        enabled = connectionId != null,
                         shape = MaterialTheme.shapes.medium,
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -197,8 +203,7 @@ fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
                             trailingContent = {
                                 TextButton(
                                     onClick = { viewModel.requestDisconnect(user.id) },
-                                    enabled = state.connectionIdsByUserId[user.id] != null &&
-                                        state.disconnectingUserId != user.id
+                                    enabled = connectionId != null && state.disconnectingUserId != user.id
                                 ) {
                                     Text(if (state.disconnectingUserId == user.id) "Working…" else "Disconnect")
                                 }

@@ -27,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.core.designsystem.theme.MementoTheme
 import com.tangai.memento.feature.auth.presentation.ui.ForgotPasswordScreen
 import com.tangai.memento.feature.auth.presentation.ui.LoginScreen
@@ -37,6 +38,8 @@ import com.tangai.memento.feature.auth.presentation.viewmodel.LogoutViewModel
 import com.tangai.memento.feature.connection.presentation.ui.ConnectionScreen
 import com.tangai.memento.feature.home.presentation.ui.HomeScreen
 import com.tangai.memento.feature.home.presentation.ui.ProfileScreen
+import com.tangai.memento.feature.home.domain.FeedFilter
+import com.tangai.memento.feature.home.presentation.viewmodel.HomeViewModel
 import com.tangai.memento.feature.post.presentation.ui.MediaPickerScreen
 import com.google.firebase.auth.FirebaseAuth
 
@@ -182,8 +185,19 @@ fun MementoNavGraph(
                     )
                 }
 
-                composable(MementoRoute.Home.route) {
+                composable(MementoRoute.Home.route) { homeEntry ->
                     val logoutViewModel: LogoutViewModel = hiltViewModel()
+                    val homeViewModel: HomeViewModel = hiltViewModel()
+                    val requestedConnectionId by homeEntry.savedStateHandle
+                        .getStateFlow<String?>(SELECTED_CONNECTION_ID, null)
+                        .collectAsStateWithLifecycle()
+
+                    LaunchedEffect(requestedConnectionId) {
+                        requestedConnectionId?.let { connectionId ->
+                            homeViewModel.onFilterSelected(FeedFilter.Connection(connectionId))
+                            homeEntry.savedStateHandle[SELECTED_CONNECTION_ID] = null
+                        }
+                    }
                     LaunchedEffect(Unit) {
                         logoutViewModel.effect.collect { effect ->
                             when (effect) {
@@ -197,12 +211,23 @@ fun MementoNavGraph(
                     }
                     HomeScreen(
                         onCreateMoment = { navController.navigate(MementoRoute.CreatePost.route) },
-                        onOpenConnections = { navController.navigate(MementoRoute.Connection.route) }
+                        onOpenConnections = { navController.navigate(MementoRoute.Connection.route) },
+                        viewModel = homeViewModel
                     )
                 }
 
                 composable(MementoRoute.Connection.route) {
-                    ConnectionScreen()
+                    ConnectionScreen(
+                        onOpenConnectionFeed = { connectionId ->
+                            navController.getBackStackEntry(MementoRoute.Home.route)
+                                .savedStateHandle[SELECTED_CONNECTION_ID] = connectionId
+                            navController.navigate(MementoRoute.Home.route) {
+                                popUpTo(MementoRoute.Home.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
                 }
 
                 composable(MementoRoute.Profile.route) {
@@ -246,3 +271,5 @@ fun MementoNavGraph(
         }
     }
 }
+
+private const val SELECTED_CONNECTION_ID = "selected_connection_id"

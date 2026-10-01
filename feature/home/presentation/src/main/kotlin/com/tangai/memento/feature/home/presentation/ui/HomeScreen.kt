@@ -2,13 +2,17 @@ package com.tangai.memento.feature.home.presentation.ui
 
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
@@ -28,17 +33,26 @@ import androidx.compose.material3.FilterChip as MaterialFilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +76,7 @@ import com.tangai.memento.ui.MementoScreenHeader
 import coil3.compose.AsyncImage
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun HomeScreen(
     onCreateMoment: () -> Unit,
     onOpenConnections: () -> Unit,
@@ -69,6 +84,28 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<Post?>(null) }
+    var showConnectionPicker by remember { mutableStateOf(false) }
+    val connectionFilterListState = rememberLazyListState()
+    val selectedConnectionId = (uiState.selectedFilter as? FeedFilter.Connection)?.connectionId
+
+    LaunchedEffect(selectedConnectionId, uiState.suggestedConnections) {
+        val selectedIndex = uiState.suggestedConnections
+            .indexOfFirst { it.id == selectedConnectionId }
+        if (selectedIndex >= 0) {
+            connectionFilterListState.animateScrollToItem(selectedIndex + 1)
+        }
+    }
+
+    if (showConnectionPicker) {
+        ConnectionPickerSheet(
+            state = uiState,
+            onSelect = { connectionId ->
+                viewModel.onFilterSelected(FeedFilter.Connection(connectionId))
+                showConnectionPicker = false
+            },
+            onDismiss = { showConnectionPicker = false }
+        )
+    }
 
     pendingDelete?.let { post ->
         AlertDialog(
@@ -107,6 +144,7 @@ fun HomeScreen(
             )
 
             LazyRow(
+                state = connectionFilterListState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
@@ -119,8 +157,7 @@ fun HomeScreen(
                     )
                 }
 
-                items(uiState.connections, key = { it.id }) { connection ->
-                    Spacer(modifier = Modifier.width(8.dp))
+                items(uiState.suggestedConnections, key = { it.id }) { connection ->
                     FeedFilterChip(
                         label = uiState.labelFor(connection),
                         avatarLabel = uiState.connectionUsers[connection.id]
@@ -133,6 +170,23 @@ fun HomeScreen(
                                 (uiState.selectedFilter as FeedFilter.Connection).connectionId == connection.id),
                         onClick = { viewModel.onFilterSelected(FeedFilter.Connection(connection.id)) }
                     )
+                }
+
+                if (uiState.hasMoreConnections) {
+                    item(key = "more-connections") {
+                        MaterialFilterChip(
+                            selected = false,
+                            onClick = { showConnectionPicker = true },
+                            label = { Text("More") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.MoreHoriz,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        )
+                    }
                 }
             }
 
@@ -275,6 +329,123 @@ fun HomeScreen(
             }
         }
 
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun ConnectionPickerSheet(
+    state: com.tangai.memento.feature.home.presentation.viewmodel.HomeUiState,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    val connections = remember(state.orderedConnections, state.connectionLabels, query) {
+        val normalizedQuery = query.trim().lowercase()
+        if (normalizedQuery.isEmpty()) {
+            state.orderedConnections
+        } else {
+            state.orderedConnections.filter { connection ->
+                val user = state.connectionUsers[connection.id]
+                state.labelFor(connection).contains(normalizedQuery, ignoreCase = true) ||
+                    user?.username?.contains(normalizedQuery, ignoreCase = true) == true
+            }
+        }
+    }
+    val selectedId = (state.selectedFilter as? FeedFilter.Connection)?.connectionId
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Text(
+            text = "Choose a connection",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+        )
+
+        if (state.connections.size > 8) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                label = { Text("Search connections") },
+                leadingIcon = {
+                    Icon(Icons.Outlined.Search, contentDescription = null)
+                },
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 480.dp),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (connections.isEmpty()) {
+                item(key = "no-connection-results") {
+                    Text(
+                        text = "No connections found",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp)
+                    )
+                }
+            }
+            items(connections, key = { it.id }) { connection ->
+                val user = state.connectionUsers[connection.id]
+                val displayName = state.labelFor(connection)
+                val selected = connection.id == selectedId
+                ListItem(
+                    headlineContent = {
+                        Text(
+                            text = displayName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    supportingContent = user?.username
+                        ?.takeIf(String::isNotBlank)
+                        ?.let { username ->
+                            {
+                                Text(
+                                    text = "@$username",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        },
+                    leadingContent = {
+                        UserAvatar(
+                            imageModel = user?.avatarPath,
+                            fallbackLabel = displayName.firstOrNull()?.uppercase() ?: "?",
+                            size = 44.dp,
+                            selected = selected
+                        )
+                    },
+                    trailingContent = {
+                        RadioButton(selected = selected, onClick = null)
+                    },
+                    colors = ListItemDefaults.colors(
+                        containerColor = if (selected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerLow
+                        }
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable { onSelect(connection.id) }
+                )
+            }
+        }
     }
 }
 
