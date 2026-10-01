@@ -78,7 +78,7 @@ fun LoginScreen(
                     text = "Welcome back to your shared moments.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,ày
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 6.dp, bottom = 20.dp)
