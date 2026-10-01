@@ -1,6 +1,7 @@
 package com.tangai.memento.feature.auth.presentation.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,12 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,110 +50,127 @@ fun LoginScreen(
         if (!uiState.isLoading) viewModel.onLoginClick(onNavigateToHome)
     }
 
-    AuthScreenLayout {
-        AuthHero(
-            icon = Icons.Outlined.PhotoLibrary,
-            title = "Memento",
-            subtitle = "Private moments, shared with the people who matter.",
-            brandTitle = true
-        )
-
-        Spacer(modifier = Modifier.height(36.dp))
-
+    AuthScreenLayout(contentAlignment = Alignment.Center) {
         Text(
-            text = "Welcome back",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Text(
-            text = "Sign in to continue to your moments.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+            text = "Memento",
+            style = MaterialTheme.typography.displayLarge,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
 
-        OutlinedTextField(
-            value = uiState.account,
-            onValueChange = viewModel::onAccountChanged,
-            label = { Text("Email") },
-            enabled = !uiState.isLoading,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentType = ContentType.EmailAddress },
-            shape = MaterialTheme.shapes.medium
-        )
+        Spacer(modifier = Modifier.height(32.dp))
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = uiState.password,
-            onValueChange = viewModel::onPasswordChanged,
-            label = { Text("Password") },
-            visualTransformation = if (uiState.isPasswordVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
-            enabled = !uiState.isLoading,
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(onDone = { submit() }),
-            trailingIcon = {
-                PasswordVisibilityButton(
-                    visible = uiState.isPasswordVisible,
-                    onClick = viewModel::onPasswordVisibilityToggle
-                )
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentType = ContentType.Password },
-            shape = MaterialTheme.shapes.medium
-        )
-
-        TextButton(
-            onClick = onNavigateToForgotPassword,
-            enabled = !uiState.isLoading,
-            modifier = Modifier.align(Alignment.End)
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Forgot password?")
-        }
-
-        uiState.errorMessage?.let { message ->
-            AuthStatusMessage(
-                message = message,
-                isError = true,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
-
-        Button(
-            onClick = submit,
-            enabled = !uiState.isLoading,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 20.dp)
-                .heightIn(min = 48.dp)
-        ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "Sign in",
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = "Welcome back to your shared moments.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,ày
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp, bottom = 20.dp)
+                )
+
+                OutlinedTextField(
+                    value = uiState.account,
+                    onValueChange = viewModel::onAccountChanged,
+                    label = { Text("Email") },
+                    enabled = !uiState.isLoading,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentType = ContentType.EmailAddress },
+                    shape = MaterialTheme.shapes.medium,
+                    colors = authTextFieldColors()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = uiState.password,
+                    onValueChange = viewModel::onPasswordChanged,
+                    label = { Text("Password") },
+                    visualTransformation = if (uiState.isPasswordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    enabled = !uiState.isLoading,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    trailingIcon = {
+                        PasswordVisibilityButton(
+                            visible = uiState.isPasswordVisible,
+                            onClick = viewModel::onPasswordVisibilityToggle
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentType = ContentType.Password },
+                    shape = MaterialTheme.shapes.medium,
+                    colors = authTextFieldColors()
+                )
+
+                TextButton(
+                    onClick = onNavigateToForgotPassword,
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Forgot password?")
+                }
+
+                uiState.errorMessage?.let { message ->
+                    AuthStatusMessage(
+                        message = message,
+                        isError = true,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                Button(
+                    onClick = submit,
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                        .heightIn(min = 48.dp)
+                ) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                    }
+                    Text(if (uiState.isLoading) "Signing in…" else "Sign in")
+                }
             }
-            Text(if (uiState.isLoading) "Signing in…" else "Sign in")
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {

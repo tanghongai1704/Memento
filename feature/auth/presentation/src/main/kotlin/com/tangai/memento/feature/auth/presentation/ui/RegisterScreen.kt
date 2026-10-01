@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PersonAddAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -64,15 +62,15 @@ fun RegisterScreen(
     }
 
     AuthScreenLayout(
-        topBar = { AuthBackTopBar(title = "Sign up", onNavigateBack = onNavigateToLogin) }
+        topBar = { AuthBackTopBar(title = "Create account", onNavigateBack = onNavigateToLogin) }
     ) {
-        AuthHero(
-            icon = Icons.Outlined.PersonAddAlt,
-            title = "Create your account",
-            subtitle = "Set up your account to start sharing private moments."
+        Text(
+            text = "Set up your account to start sharing private moments.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
             value = uiState.email,
@@ -89,7 +87,8 @@ fun RegisterScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .semantics { contentType = ContentType.EmailAddress },
-            shape = MaterialTheme.shapes.medium
+            shape = MaterialTheme.shapes.medium,
+            colors = authTextFieldColors()
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -120,7 +119,8 @@ fun RegisterScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .semantics { contentType = ContentType.NewPassword },
-            shape = MaterialTheme.shapes.medium
+            shape = MaterialTheme.shapes.medium,
+            colors = authTextFieldColors()
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -152,7 +152,8 @@ fun RegisterScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .semantics { contentType = ContentType.NewPassword },
-            shape = MaterialTheme.shapes.medium
+            shape = MaterialTheme.shapes.medium,
+            colors = authTextFieldColors()
         )
 
         uiState.generalError?.let { message ->

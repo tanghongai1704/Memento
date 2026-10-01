@@ -3,14 +3,13 @@ package com.tangai.memento.feature.auth.presentation.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -20,36 +19,41 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun AuthScreenLayout(
     topBar: @Composable () -> Unit = {},
+    contentAlignment: Alignment = Alignment.TopCenter,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Scaffold(topBar = topBar) { innerPadding ->
+    Scaffold(
+        topBar = topBar,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .imePadding(),
-            contentAlignment = Alignment.TopCenter
+                .padding(innerPadding),
+            contentAlignment = contentAlignment
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 480.dp)
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 32.dp),
+                    .imePadding()
+                    .padding(horizontal = 24.dp, vertical = 24.dp),
                 content = content
             )
         }
@@ -57,50 +61,14 @@ internal fun AuthScreenLayout(
 }
 
 @Composable
-internal fun AuthHero(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    brandTitle: Boolean = false,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shape = CircleShape,
-            modifier = Modifier.size(64.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(30.dp))
-            }
-        }
-        Text(
-            text = title,
-            style = if (brandTitle) {
-                MaterialTheme.typography.displaySmall
-            } else {
-                MaterialTheme.typography.headlineLarge
-            },
-            color = if (brandTitle) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 20.dp)
-        )
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-    }
+internal fun authTextFieldColors(): TextFieldColors {
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    return OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = containerColor,
+        unfocusedContainerColor = containerColor,
+        disabledContainerColor = containerColor,
+        errorContainerColor = containerColor
+    )
 }
 
 @Composable

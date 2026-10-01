@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.LockReset
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,13 +43,13 @@ fun ForgotPasswordScreen(
     AuthScreenLayout(
         topBar = { AuthBackTopBar(title = "Reset password", onNavigateBack = onNavigateBack) }
     ) {
-        AuthHero(
-            icon = Icons.Outlined.LockReset,
-            title = "Reset your password",
-            subtitle = "Enter the email linked to your account and we’ll send you a reset link."
+        Text(
+            text = "Enter the email linked to your account and we’ll send you a reset link.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedTextField(
             value = state.email,
@@ -69,7 +67,8 @@ fun ForgotPasswordScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .semantics { contentType = ContentType.EmailAddress },
-            shape = MaterialTheme.shapes.medium
+            shape = MaterialTheme.shapes.medium,
+            colors = authTextFieldColors()
         )
 
         state.errorMessage?.let { message ->

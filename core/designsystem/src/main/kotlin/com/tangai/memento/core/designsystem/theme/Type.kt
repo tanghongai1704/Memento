@@ -36,8 +36,8 @@ val AppTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = displayFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 38.sp,
-        lineHeight = 44.sp,
+        fontSize = 48.sp,
+        lineHeight = 56.sp,
         letterSpacing = (-0.5).sp
     ),
     displayMedium = baseline.displayMedium.copy(fontFamily = displayFontFamily, fontWeight = FontWeight.SemiBold),
