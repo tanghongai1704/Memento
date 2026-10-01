@@ -108,6 +108,11 @@ class AuthRepositoryImpl @Inject constructor(
         profile
     }
 
+    override suspend fun getCachedCurrentUserProfile(): Result<User> = runCatching {
+        val uid = firebaseAuthDataSource.currentUser()?.uid ?: error("User is not signed in.")
+        userDao.getUserById(uid)?.toDomain() ?: error("No cached profile is available.")
+    }
+
     override suspend fun getCurrentUserInviteCode(): Result<String> = runCatching {
         val uid = firebaseAuthDataSource.currentUser()?.uid ?: error("User is not signed in.")
         val data = functions.getHttpsCallable("getMyInviteCode")
@@ -155,6 +160,8 @@ class AuthRepositoryImpl @Inject constructor(
             "Account changed while saving profile."
         }
         getCurrentUserProfile().getOrThrow()
+        userDao.getUserById(authUser.uid)?.toDomain()
+            ?: error("Saved profile is missing after update.")
     }
 
     override suspend fun sendPasswordResetEmail(email: String): Result<Unit> =

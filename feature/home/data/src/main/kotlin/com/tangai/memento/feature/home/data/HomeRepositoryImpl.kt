@@ -78,7 +78,11 @@ class HomeRepositoryImpl @Inject constructor(
                     }
                 }
                 val cacheError = postSyncMutex.withLock {
-                    syncDocuments(connectionId, documents)
+                    val mediaToCache = syncDocumentMetadata(connectionId, documents)
+                    // Room is the UI source: publish post metadata immediately, then let each
+                    // photo keep its loading state while Storage fills the local cache.
+                    trySend(Result.success(currentPage(uid)))
+                    cacheMediaItems(mediaToCache)
                 }
                 trySend(Result.success(currentPage(uid)))
                 cacheError?.let { trySend(Result.failure(it)) }
@@ -183,7 +187,7 @@ class HomeRepositoryImpl @Inject constructor(
                 .documents
 
             val cacheError = postSyncMutex.withLock {
-                syncDocuments(target.connectionId, documents)
+                cacheMediaItems(syncDocumentMetadata(target.connectionId, documents))
             }
             cacheError?.let { throw it }
 
@@ -248,22 +252,28 @@ class HomeRepositoryImpl @Inject constructor(
         return media
     }
 
-    private suspend fun syncDocuments(
+    private suspend fun syncDocumentMetadata(
         connectionId: String,
         documents: List<DocumentSnapshot>
-    ): Throwable? {
-        var firstCacheError: Throwable? = null
+    ): List<MediaItemEntity> {
+        val mediaToCache = mutableListOf<MediaItemEntity>()
         documents.forEach { document ->
             val status = PostStatus.valueOf(requireNotNull(document.getString("status")))
             val media = storePost(connectionId, document)
             if (status == PostStatus.DELETED) {
                 media.forEach { cachedMediaFile(it.connectionId, it.postId, it.mediaId).delete() }
             } else {
-                media.forEach { item ->
-                    runCatching { cacheMedia(item) }
-                        .onFailure { if (firstCacheError == null) firstCacheError = it }
-                }
+                mediaToCache += media
             }
+        }
+        return mediaToCache
+    }
+
+    private suspend fun cacheMediaItems(mediaItems: List<MediaItemEntity>): Throwable? {
+        var firstCacheError: Throwable? = null
+        mediaItems.forEach { item ->
+            runCatching { cacheMedia(item) }
+                .onFailure { if (firstCacheError == null) firstCacheError = it }
         }
         return firstCacheError
     }

@@ -36,7 +36,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             cachedHomeDataLoaded.await()
             homeRepository.observeConnectedUsers().collect { result ->
-                result.onSuccess { users ->
+                result.onSuccess {
                     val connections = homeRepository.loadCachedConnections()
                         .getOrDefault(_uiState.value.connections)
                     // A remote disconnect can invalidate the Firestore post listeners before they
@@ -44,7 +44,9 @@ class HomeViewModel @Inject constructor(
                     // reconciliation removes posts whose membership has just been revoked.
                     val posts = homeRepository.loadPosts()
                         .getOrDefault(_uiState.value.posts)
-                    val usersById = users.associateBy(User::id)
+                    val usersById = homeRepository.loadCachedConnectedUsers()
+                        .getOrDefault(emptyList())
+                        .associateBy(User::id)
                     val current = _uiState.value
                     val activeConnectionIds = connections.mapTo(mutableSetOf()) { it.id }
                     val selectedFilter = (current.selectedFilter as? FeedFilter.Connection)
@@ -72,7 +74,7 @@ class HomeViewModel @Inject constructor(
             cachedHomeDataLoaded.await()
             homeRepository.observePosts().collect { result ->
                 result.onSuccess { page ->
-                    val authorProfiles = loadAuthorProfiles(page.posts)
+                    val authorProfiles = loadCachedAuthorProfiles(page.posts)
                     _uiState.value = _uiState.value.copy(
                         posts = page.posts,
                         authorProfiles = authorProfiles,
@@ -82,6 +84,7 @@ class HomeViewModel @Inject constructor(
                         errorMessage = null
                     )
                     ensurePostMedia(page.posts)
+                    refreshAuthorProfiles(page.posts)
                 }.onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -117,10 +120,8 @@ class HomeViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            val hasCachedContent = _uiState.value.posts.isNotEmpty() ||
-                _uiState.value.connections.isNotEmpty()
             _uiState.value = _uiState.value.copy(
-                isLoading = !hasCachedContent,
+                isLoading = false,
                 errorMessage = null
             )
             homeRepository.loadConnectedUsers()
@@ -147,13 +148,14 @@ class HomeViewModel @Inject constructor(
                 .onSuccess { page ->
                     _uiState.value = _uiState.value.copy(
                         posts = page.posts,
-                        authorProfiles = loadAuthorProfiles(page.posts),
+                        authorProfiles = loadCachedAuthorProfiles(page.posts),
                         mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         isLoadingMore = false,
                         connectionIdsWithMore = page.connectionIdsWithMore,
                         errorMessage = null
                     )
                     ensurePostMedia(page.posts)
+                    refreshAuthorProfiles(page.posts)
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -182,11 +184,12 @@ class HomeViewModel @Inject constructor(
                     )
                     _uiState.value = _uiState.value.copy(
                         posts = posts,
-                        authorProfiles = loadAuthorProfiles(posts),
+                        authorProfiles = loadCachedAuthorProfiles(posts),
                         deletingPostKeys = _uiState.value.deletingPostKeys - postKey,
                         mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         errorMessage = null
                     )
+                    refreshAuthorProfiles(posts)
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -251,10 +254,24 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadAuthorProfiles(posts: List<Post>): Map<String, User> =
-        homeRepository.loadUsers(posts.mapTo(mutableSetOf(), Post::authorId))
+    private suspend fun loadAuthorProfiles(posts: List<Post>): Map<String, User> {
+        val authorIds = posts.mapTo(mutableSetOf(), Post::authorId)
+        homeRepository.loadUsers(authorIds)
+        return homeRepository.loadCachedUsers(authorIds)
             .getOrDefault(emptyList())
             .associateBy(User::id)
+    }
+
+    private fun refreshAuthorProfiles(posts: List<Post>) {
+        viewModelScope.launch {
+            val profiles = loadAuthorProfiles(posts)
+            if (profiles.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    authorProfiles = _uiState.value.authorProfiles + profiles
+                )
+            }
+        }
+    }
 
     private suspend fun loadCachedAuthorProfiles(posts: List<Post>): Map<String, User> =
         homeRepository.loadCachedUsers(posts.mapTo(mutableSetOf(), Post::authorId))

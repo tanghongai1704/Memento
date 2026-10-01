@@ -66,6 +66,24 @@ class ConnectionRepositoryImpl @Inject constructor(
         connections
     }
 
+    override suspend fun loadCachedConnections(): Result<List<Connection>> = runCatching {
+        val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
+        database.connectionMemberDao().getActiveMembershipsForUser(uid).mapNotNull { membership ->
+            database.connectionDao().getConnectionById(membership.connectionId)
+                ?.takeIf { it.status == ConnectionStatus.ACTIVE }
+                ?.let { connection ->
+                    connection.toDomain(
+                        database.connectionMemberDao().getMembersByConnectionId(connection.id)
+                            .map { it.toDomain() }
+                    )
+                }
+        }.sortedWith(
+            compareByDescending<Connection> { it.lastPostAt != null }
+                .thenByDescending { it.lastPostAt ?: Long.MIN_VALUE }
+                .thenByDescending(Connection::createdAt)
+        ).also { check(firebaseAuth.currentUser?.uid == uid) }
+    }
+
     override suspend fun loadConnections(): Result<List<User>> = runCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
         getCurrentUserConnections().getOrThrow().flatMap { it.members }

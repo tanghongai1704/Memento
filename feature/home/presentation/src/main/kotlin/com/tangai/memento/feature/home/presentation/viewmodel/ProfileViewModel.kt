@@ -47,16 +47,35 @@ class ProfileViewModel @Inject constructor(
 
     fun loadProfile() {
         viewModelScope.launch {
-            state.value = state.value.copy(isLoading = true, errorMessage = null)
-            val profile = repository.getCurrentUserProfile().getOrElse { error ->
-                state.value = state.value.copy(
-                    isLoading = false,
-                    errorMessage = error.message ?: "Could not load profile."
-                )
-                return@launch
+            val cachedProfile = repository.getCachedCurrentUserProfile().getOrNull()
+            if (cachedProfile != null) {
+                showUser(cachedProfile)
+            } else {
+                state.value = state.value.copy(isLoading = true, errorMessage = null)
             }
-            showUser(profile)
-            loadInviteCode()
+            launch { loadInviteCode() }
+
+            repository.getCurrentUserProfile()
+                .onSuccess {
+                    repository.getCachedCurrentUserProfile()
+                        .onSuccess(::showSyncedUser)
+                        .onFailure { error ->
+                            state.value = state.value.copy(
+                                isLoading = false,
+                                errorMessage = error.message ?: "Could not read the saved profile."
+                            )
+                        }
+                }
+                .onFailure { error ->
+                    state.value = state.value.copy(
+                        isLoading = false,
+                        errorMessage = if (state.value.user == null) {
+                            error.message ?: "Could not load profile."
+                        } else {
+                            null
+                        }
+                    )
+                }
         }
     }
 
@@ -161,5 +180,14 @@ class ProfileViewModel @Inject constructor(
             isLoadingInviteCode = current.isLoadingInviteCode,
             isLoading = false
         )
+    }
+
+    private fun showSyncedUser(user: User) {
+        val current = state.value
+        if (current.user != null && current.hasChanges) {
+            state.value = current.copy(user = user, isLoading = false, errorMessage = null)
+        } else {
+            showUser(user)
+        }
     }
 }

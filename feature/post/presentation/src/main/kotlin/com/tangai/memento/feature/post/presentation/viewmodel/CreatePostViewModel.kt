@@ -1,6 +1,7 @@
 package com.tangai.memento.feature.post.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.tangai.memento.domain.model.LocalMediaItem
 import com.tangai.memento.domain.model.MediaType
@@ -9,6 +10,7 @@ import com.tangai.memento.domain.model.Connection
 import com.tangai.memento.domain.model.LayoutType
 import com.tangai.memento.domain.model.User
 import com.tangai.memento.domain.model.displayLabel
+import com.tangai.memento.feature.post.domain.PendingPhotoPost
 import com.tangai.memento.feature.post.domain.PostRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
@@ -21,23 +23,37 @@ import javax.inject.Inject
 @HiltViewModel
 class CreatePostViewModel @Inject constructor(
     private val postRepository: PostRepository,
-    private val connectionRepository: com.tangai.memento.feature.connection.domain.ConnectionRepository
+    private val connectionRepository: com.tangai.memento.feature.connection.domain.ConnectionRepository,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CreatePostUiState())
     private var loadRecipientsJob: Job? = null
+    private val initialRecipientId: String? = savedStateHandle[INITIAL_RECIPIENT_ID]
 
     init {
         loadCreatePostData()
         viewModelScope.launch {
             connectionRepository.observeConnections().collect { result ->
-                result.onSuccess { users ->
-                    val usersById = users.associateBy { it.id }
-                    val current = _uiState.value
-                    _uiState.value = current.copy(
-                        recipientLabels = current.recipients.associate { connection ->
-                            connection.id to connection.displayLabel(usersById)
-                        },
-                        recipientUsers = connectionUsers(current.recipients, usersById)
+                result.onSuccess {
+                    val recipients = connectionRepository.loadCachedConnections()
+                        .getOrDefault(_uiState.value.recipients)
+                    val users = connectionRepository.loadCachedConnectionUsers()
+                        .getOrNull()?.users.orEmpty()
+                    applyRecipients(
+                        recipients = recipients,
+                        connectedUsers = users,
+                        pending = _uiState.value.pendingPhoto,
+                        restoreDraft = false,
+                        isLoading = false
+                    )
+                }.onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = if (_uiState.value.recipients.isEmpty()) {
+                            "We couldn’t load your connections. Check your connection and try again."
+                        } else {
+                            null
+                        }
                     )
                 }
             }
@@ -48,56 +64,85 @@ class CreatePostViewModel @Inject constructor(
 
     fun retryLoadingConnections() {
         loadCreatePostData()
+        viewModelScope.launch {
+            connectionRepository.loadConnections()
+                .onFailure {
+                    if (_uiState.value.recipients.isEmpty()) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            errorMessage = "We couldn’t load your connections. Check your connection and try again."
+                        )
+                    }
+                }
+        }
     }
 
     private fun loadCreatePostData() {
         loadRecipientsJob?.cancel()
         loadRecipientsJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            val result = connectionRepository.getCurrentUserConnections()
-            val recipients = result.getOrElse { error ->
-                _uiState.value = _uiState.value.copy(
-                    recipients = emptyList(),
-                    isLoading = false,
-                    errorMessage = "We couldn’t load your connections. Check your connection and try again."
-                )
-                return@launch
-            }
-            val connectedUsers = if (recipients.isEmpty()) {
-                emptyList()
-            } else {
-                connectionRepository.loadConnections().getOrDefault(emptyList())
-            }
-            val connectedUsersById = connectedUsers.associateBy { it.id }
-            val pending = postRepository.getLatestPendingPhoto().getOrNull()
-            val selectedRecipient = pending?.post?.connectionId
-                ?.let { id -> recipients.find { it.id == id } }
-                ?: _uiState.value.selectedRecipient
-                    ?.id
-                    ?.let { id -> recipients.find { it.id == id } }
-                ?: recipients.firstOrNull()
+            val hasExistingContent = _uiState.value.recipients.isNotEmpty()
             _uiState.value = _uiState.value.copy(
-                recipients = recipients,
-                recipientLabels = recipients.associate { connection ->
-                    connection.id to connection.displayLabel(connectedUsersById)
-                },
-                recipientUsers = connectionUsers(recipients, connectedUsersById),
-                selectedRecipient = selectedRecipient,
-                selectedMedia = pending?.localUris?.mapIndexed { index, uri ->
-                        LocalMediaItem(
-                            uri = uri,
-                            type = MediaType.IMAGE,
-                            displayName = "Pending photo ${index + 1}",
-                            processedSizeBytes = pending.post.mediaItems.getOrNull(index)?.sizeBytes ?: 0L
-                        )
-                } ?: emptyList(),
-                selectedLayout = pending?.post?.layoutType ?: LayoutType.SINGLE,
-                caption = pending?.post?.caption.orEmpty(),
-                pendingPhoto = pending,
-                isLoading = false,
+                isLoading = !hasExistingContent,
                 errorMessage = null
             )
+            val pending = postRepository.getLatestPendingPhoto().getOrNull()
+            val cachedRecipients = connectionRepository.loadCachedConnections().getOrDefault(emptyList())
+            val cachedUsers = connectionRepository.loadCachedConnectionUsers()
+                .getOrNull()?.users.orEmpty()
+            applyRecipients(
+                recipients = cachedRecipients,
+                connectedUsers = cachedUsers,
+                pending = pending,
+                restoreDraft = true,
+                isLoading = false
+            )
         }
+    }
+
+    private fun applyRecipients(
+        recipients: List<Connection>,
+        connectedUsers: List<User>,
+        pending: PendingPhotoPost?,
+        restoreDraft: Boolean,
+        isLoading: Boolean
+    ) {
+        val current = _uiState.value
+        val connectedUsersById = connectedUsers.associateBy(User::id)
+        val selectedRecipient = pending?.post?.connectionId
+            ?.let { id -> recipients.find { it.id == id } }
+            ?: current.selectedRecipient?.id
+                ?.let { id -> recipients.find { it.id == id } }
+            ?: initialRecipientId?.let { id -> recipients.find { it.id == id } }
+            ?: recipients.firstOrNull()
+        _uiState.value = current.copy(
+            recipients = recipients,
+            recipientLabels = recipients.associate { connection ->
+                connection.id to connection.displayLabel(connectedUsersById)
+            },
+            recipientUsers = connectionUsers(recipients, connectedUsersById),
+            selectedRecipient = selectedRecipient,
+            selectedMedia = if (restoreDraft) {
+                pending?.localUris?.mapIndexed { index, uri ->
+                    LocalMediaItem(
+                        uri = uri,
+                        type = MediaType.IMAGE,
+                        displayName = "Pending photo ${index + 1}",
+                        processedSizeBytes = pending.post.mediaItems.getOrNull(index)?.sizeBytes ?: 0L
+                    )
+                }.orEmpty()
+            } else {
+                current.selectedMedia
+            },
+            selectedLayout = if (restoreDraft) {
+                pending?.post?.layoutType ?: LayoutType.SINGLE
+            } else {
+                current.selectedLayout
+            },
+            caption = if (restoreDraft) pending?.post?.caption.orEmpty() else current.caption,
+            pendingPhoto = if (restoreDraft) pending else current.pendingPhoto,
+            isLoading = isLoading,
+            errorMessage = null
+        )
     }
 
     fun onRecipientSelected(user: Connection) {
@@ -246,6 +291,7 @@ class CreatePostViewModel @Inject constructor(
 
     private companion object {
         const val MAX_PHOTOS_PER_POST = 5
+        const val INITIAL_RECIPIENT_ID = "recipientId"
     }
 
     private fun connectionUsers(

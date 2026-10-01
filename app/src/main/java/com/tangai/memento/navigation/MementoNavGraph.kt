@@ -22,6 +22,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
@@ -51,6 +53,13 @@ fun MementoNavGraph(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val selectedHomeConnectionId = if (currentRoute == MementoRoute.Home.route) {
+        val homeViewModel: HomeViewModel = hiltViewModel(checkNotNull(backStackEntry))
+        val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+        (homeUiState.selectedFilter as? FeedFilter.Connection)?.connectionId
+    } else {
+        null
+    }
     val showBottomBar = currentRoute in setOf(
         MementoRoute.Home.route,
         MementoRoute.Connection.route,
@@ -89,7 +98,11 @@ fun MementoNavGraph(
             floatingActionButton = {
                 if (showBottomBar) {
                     FloatingActionButton(
-                        onClick = { navController.navigate(MementoRoute.CreatePost.route) },
+                        onClick = {
+                            navController.navigate(
+                                MementoRoute.CreatePost.destination(selectedHomeConnectionId)
+                            )
+                        },
                         shape = CircleShape,
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
@@ -210,7 +223,11 @@ fun MementoNavGraph(
                         }
                     }
                     HomeScreen(
-                        onCreateMoment = { navController.navigate(MementoRoute.CreatePost.route) },
+                        onCreateMoment = {
+                            navController.navigate(
+                                MementoRoute.CreatePost.destination(selectedHomeConnectionId)
+                            )
+                        },
                         onOpenConnections = { navController.navigate(MementoRoute.Connection.route) },
                         viewModel = homeViewModel
                     )
@@ -250,7 +267,16 @@ fun MementoNavGraph(
                     )
                 }
 
-                composable(MementoRoute.CreatePost.route) {
+                composable(
+                    route = MementoRoute.CreatePost.route,
+                    arguments = listOf(
+                        navArgument(MementoRoute.RECIPIENT_ID_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) {
                     MediaPickerScreen(
                         onNavigateBack = {
                             navController.popBackStack()

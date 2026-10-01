@@ -30,19 +30,18 @@ class ConnectionViewModel @Inject constructor(
             val cached = repository.loadCachedConnectionUsers().getOrNull()
             if (auth.currentUser?.uid != uid) return@launch
             cached?.let(::showConnections)
-            state.value = state.value.copy(isLoading = cached == null || cached.users.isEmpty())
+            state.value = state.value.copy(isLoading = false)
 
             repository.observeConnections().collectLatest { result ->
                 if (auth.currentUser?.uid == uid) {
-                    result.onSuccess { users ->
+                    result.onSuccess {
                         val refreshedCache = repository.loadCachedConnectionUsers().getOrNull()
                         if (refreshedCache != null) {
                             showConnections(refreshedCache)
                         } else {
                             state.value = state.value.copy(
-                                connectedUsers = users,
                                 isLoading = false,
-                                errorMessage = null
+                                errorMessage = "Could not read your saved connections."
                             )
                         }
                     }
@@ -109,12 +108,13 @@ class ConnectionViewModel @Inject constructor(
             )
             repository.disconnectDirect(connectionId)
                 .onSuccess {
-                    if (auth.currentUser?.uid == uid) state.value = state.value.copy(
-                        connectedUsers = state.value.connectedUsers.filterNot { it.id == userId },
-                        connectionIdsByUserId = state.value.connectionIdsByUserId - userId,
-                        disconnectingUserId = null,
-                        successMessage = "Disconnected successfully."
-                    )
+                    if (auth.currentUser?.uid == uid) {
+                        repository.loadCachedConnectionUsers().getOrNull()?.let(::showConnections)
+                        state.value = state.value.copy(
+                            disconnectingUserId = null,
+                            successMessage = "Disconnected successfully."
+                        )
+                    }
                 }
                 .onFailure { error ->
                     if (auth.currentUser?.uid == uid) state.value = state.value.copy(

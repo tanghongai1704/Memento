@@ -2,6 +2,14 @@
 
 `app` quản lý navigation và binding Hilt. Mỗi feature tách `presentation`, `domain`, `data`; `core/domain` chứa model dùng chung, `core/database` chứa Room v3, `core/network` cung cấp Firebase/network status, `core/media` xử lý media dùng chung, `core/ui` và `core/designsystem` phục vụ Compose.
 
+## Nguyên tắc offline-first
+
+Với dữ liệu đã cache, UI luôn đọc và hiển thị Room trước; không chờ Firestore, Functions hoặc Storage để mở màn hình. Đồng bộ server chạy nền, ghi kết quả vào Room, rồi presentation đọc lại Room để cập nhật UI. Dữ liệu remote trả về không được dùng làm nguồn hiển thị song song với Room.
+
+Home, Connections, Profile và Create Post đều áp dụng cùng thứ tự này. Trạng thái loading toàn màn hình chỉ dành cho dữ liệu bắt buộc chưa từng có local; refresh nền không được che nội dung hoặc empty state đang hiển thị. Metadata post được phát từ Room trước khi tải media; từng ảnh có loading/error riêng.
+
+Các mutation cần server xác nhận như login, đăng bài, redeem, disconnect, xóa post và lưu profile vẫn hiển thị tiến trình tại đúng control đang thao tác. Nội dung local hiện có phải được giữ trên màn hình; sau thành công repository ghi Room và UI đọc lại local. Draft post là ngoại lệ được ghi Room trước upload để hỗ trợ retry idempotent.
+
 ## Auth và profile
 
 `AuthRepository` gọi Firebase Auth, đồng bộ `users/{uid}` bằng transaction rồi cache profile vào Room. Login chỉ hoàn tất khi profile sẵn sàng, trừ lỗi mạng khi đúng UID đã có cache hợp lệ. Profile cho phép sửa display name, username và bio; forgot password dùng Firebase Auth.
