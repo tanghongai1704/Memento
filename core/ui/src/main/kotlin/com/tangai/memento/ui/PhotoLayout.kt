@@ -22,9 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -39,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.tangai.memento.domain.model.LayoutType
 
+enum class MissingPhotoState { LOADING, UNAVAILABLE }
+
 @Composable
 fun PhotoLayout(
     media: List<Any?>,
@@ -46,10 +50,22 @@ fun PhotoLayout(
     contentDescription: String,
     modifier: Modifier = Modifier,
     height: Dp = 240.dp,
-    onRemove: ((Int) -> Unit)? = null
+    onRemove: ((Int) -> Unit)? = null,
+    onPhotoClick: ((Int) -> Unit)? = null,
+    missingPhotoState: MissingPhotoState = MissingPhotoState.UNAVAILABLE,
+    onRetry: (() -> Unit)? = null
 ) {
     if (media.isEmpty()) {
-        PhotoCell(null, contentDescription, 0, onRemove, modifier.fillMaxWidth().height(height))
+        PhotoCell(
+            model = null,
+            description = contentDescription,
+            index = 0,
+            onRemove = onRemove,
+            onPhotoClick = onPhotoClick,
+            missingPhotoState = missingPhotoState,
+            onRetry = onRetry,
+            modifier = modifier.fillMaxWidth().height(height)
+        )
         return
     }
     when (if (media.size == 1) LayoutType.SINGLE else layoutType) {
@@ -58,11 +74,14 @@ fun PhotoLayout(
             description = contentDescription,
             index = 0,
             onRemove = onRemove,
+            onPhotoClick = onPhotoClick,
+            missingPhotoState = missingPhotoState,
+            onRetry = onRetry,
             modifier = modifier.fillMaxWidth().height(height)
         )
-        LayoutType.GRID -> GridPhotos(media, contentDescription, modifier, height, onRemove)
-        LayoutType.COLLAGE -> CollagePhotos(media, contentDescription, modifier, height, onRemove)
-        LayoutType.CAROUSEL -> CarouselPhotos(media, contentDescription, modifier, height, onRemove)
+        LayoutType.GRID -> GridPhotos(media, contentDescription, modifier, height, onRemove, onPhotoClick, missingPhotoState, onRetry)
+        LayoutType.COLLAGE -> CollagePhotos(media, contentDescription, modifier, height, onRemove, onPhotoClick, missingPhotoState, onRetry)
+        LayoutType.CAROUSEL -> CarouselPhotos(media, contentDescription, modifier, height, onRemove, onPhotoClick, missingPhotoState, onRetry)
     }
 }
 
@@ -72,7 +91,10 @@ private fun GridPhotos(
     description: String,
     modifier: Modifier,
     height: Dp,
-    onRemove: ((Int) -> Unit)?
+    onRemove: ((Int) -> Unit)?,
+    onPhotoClick: ((Int) -> Unit)?,
+    missingPhotoState: MissingPhotoState,
+    onRetry: (() -> Unit)?
 ) {
     val rows = media.chunked(2)
     Column(
@@ -90,6 +112,9 @@ private fun GridPhotos(
                         description = "$description ${rowIndex * 2 + 1}",
                         index = rowIndex * 2,
                         onRemove = onRemove,
+                        onPhotoClick = onPhotoClick,
+                        missingPhotoState = missingPhotoState,
+                        onRetry = onRetry,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -100,6 +125,9 @@ private fun GridPhotos(
                             description = "$description ${mediaIndex + 1}",
                             index = mediaIndex,
                             onRemove = onRemove,
+                            onPhotoClick = onPhotoClick,
+                            missingPhotoState = missingPhotoState,
+                            onRetry = onRetry,
                             modifier = Modifier.weight(1f).fillMaxSize()
                         )
                     }
@@ -115,7 +143,10 @@ private fun CollagePhotos(
     description: String,
     modifier: Modifier,
     height: Dp,
-    onRemove: ((Int) -> Unit)?
+    onRemove: ((Int) -> Unit)?,
+    onPhotoClick: ((Int) -> Unit)?,
+    missingPhotoState: MissingPhotoState,
+    onRetry: (() -> Unit)?
 ) {
     Row(
         modifier = modifier.fillMaxWidth().height(height),
@@ -126,6 +157,9 @@ private fun CollagePhotos(
             description = "$description 1",
             index = 0,
             onRemove = onRemove,
+            onPhotoClick = onPhotoClick,
+            missingPhotoState = missingPhotoState,
+            onRetry = onRetry,
             modifier = Modifier.weight(1.35f).fillMaxSize()
         )
         Column(
@@ -138,6 +172,9 @@ private fun CollagePhotos(
                     description = "$description ${index + 2}",
                     index = index + 1,
                     onRemove = onRemove,
+                    onPhotoClick = onPhotoClick,
+                    missingPhotoState = missingPhotoState,
+                    onRetry = onRetry,
                     modifier = Modifier.weight(1f).fillMaxWidth()
                 )
             }
@@ -151,7 +188,10 @@ private fun CarouselPhotos(
     description: String,
     modifier: Modifier,
     height: Dp,
-    onRemove: ((Int) -> Unit)?
+    onRemove: ((Int) -> Unit)?,
+    onPhotoClick: ((Int) -> Unit)?,
+    missingPhotoState: MissingPhotoState,
+    onRetry: (() -> Unit)?
 ) {
     val listState = rememberLazyListState()
     val visiblePhoto by remember {
@@ -169,6 +209,9 @@ private fun CarouselPhotos(
                     description = "$description ${index + 1}",
                     index = index,
                     onRemove = onRemove,
+                    onPhotoClick = onPhotoClick,
+                    missingPhotoState = missingPhotoState,
+                    onRetry = onRetry,
                     modifier = Modifier.width(itemWidth).fillMaxHeight()
                 )
             }
@@ -194,37 +237,52 @@ private fun PhotoCell(
     description: String,
     index: Int,
     onRemove: ((Int) -> Unit)?,
+    onPhotoClick: ((Int) -> Unit)?,
+    missingPhotoState: MissingPhotoState,
+    onRetry: (() -> Unit)?,
     modifier: Modifier
 ) {
     Box(
         modifier = modifier
             .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(
+                if (model != null && onPhotoClick != null) {
+                    Modifier.clickable(role = Role.Button) { onPhotoClick(index) }
+                } else {
+                    Modifier
+                }
+            ),
         contentAlignment = Alignment.Center
     ) {
         if (model == null) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    Icons.Outlined.BrokenImage,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+            if (missingPhotoState == MissingPhotoState.LOADING) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    "Photo unavailable",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                Text(
-                    "Connect to the internet to download it.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+            } else {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.BrokenImage,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Photo unavailable",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                    if (onRetry != null) {
+                        TextButton(onClick = onRetry) { Text("Try again") }
+                    }
+                }
             }
         } else {
             AsyncImage(

@@ -62,6 +62,7 @@ class HomeViewModel @Inject constructor(
                         mediaCacheRevision = current.mediaCacheRevision + 1,
                         errorMessage = null
                     )
+                    ensurePostMedia(posts)
                 }.onFailure { error ->
                     _uiState.value = _uiState.value.copy(errorMessage = error.message)
                 }
@@ -80,6 +81,7 @@ class HomeViewModel @Inject constructor(
                         connectionIdsWithMore = page.connectionIdsWithMore,
                         errorMessage = null
                     )
+                    ensurePostMedia(page.posts)
                 }.onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -104,11 +106,13 @@ class HomeViewModel @Inject constructor(
             connectionLabels = connectionLabels(connections, connectedUsersById),
             connectionUsers = connectionUsers(connections, connectedUsersById),
             authorProfiles = loadCachedAuthorProfiles(posts),
+            currentUserId = auth.currentUser?.uid,
             isLoading = false,
             errorMessage = postsResult.exceptionOrNull()?.message
                 ?: connectionsResult.exceptionOrNull()?.message
                 ?: connectedUsersResult.exceptionOrNull()?.message
         )
+        ensurePostMedia(posts)
     }
 
     fun refresh() {
@@ -149,6 +153,7 @@ class HomeViewModel @Inject constructor(
                         connectionIdsWithMore = page.connectionIdsWithMore,
                         errorMessage = null
                     )
+                    ensurePostMedia(page.posts)
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -197,6 +202,54 @@ class HomeViewModel @Inject constructor(
     }
 
     fun getPostAuthor(post: Post): User? = _uiState.value.authorProfiles[post.authorId]
+
+    fun retryPostMedia(post: Post) {
+        val key = post.key()
+        if (key in _uiState.value.loadingMediaPostKeys) return
+        _uiState.value = _uiState.value.copy(
+            loadingMediaPostKeys = _uiState.value.loadingMediaPostKeys + key,
+            failedMediaPostKeys = _uiState.value.failedMediaPostKeys - key
+        )
+        downloadPostMedia(post)
+    }
+
+    private fun ensurePostMedia(posts: List<Post>) {
+        val activeKeys = posts.mapTo(mutableSetOf()) { it.key() }
+        val cachedKeys = posts.asSequence()
+            .filter(homeRepository::isPostMediaCached)
+            .mapTo(mutableSetOf()) { it.key() }
+        val current = _uiState.value
+        val alreadyHandled = current.loadingMediaPostKeys + current.failedMediaPostKeys
+        val missingPosts = posts.filter { post ->
+            post.key() !in cachedKeys && post.key() !in alreadyHandled
+        }
+        _uiState.value = current.copy(
+            loadingMediaPostKeys = (current.loadingMediaPostKeys intersect activeKeys) +
+                missingPosts.map { it.key() },
+            failedMediaPostKeys = (current.failedMediaPostKeys intersect activeKeys) - cachedKeys
+        )
+        missingPosts.forEach(::downloadPostMedia)
+    }
+
+    private fun downloadPostMedia(post: Post) {
+        viewModelScope.launch {
+            val key = post.key()
+            homeRepository.cachePostMedia(post)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        loadingMediaPostKeys = _uiState.value.loadingMediaPostKeys - key,
+                        failedMediaPostKeys = _uiState.value.failedMediaPostKeys - key,
+                        mediaCacheRevision = _uiState.value.mediaCacheRevision + 1
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        loadingMediaPostKeys = _uiState.value.loadingMediaPostKeys - key,
+                        failedMediaPostKeys = _uiState.value.failedMediaPostKeys + key
+                    )
+                }
+        }
+    }
 
     private suspend fun loadAuthorProfiles(posts: List<Post>): Map<String, User> =
         homeRepository.loadUsers(posts.mapTo(mutableSetOf(), Post::authorId))

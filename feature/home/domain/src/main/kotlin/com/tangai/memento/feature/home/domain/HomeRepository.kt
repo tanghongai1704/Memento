@@ -22,5 +22,7 @@ interface HomeRepository {
     suspend fun loadConnectedUsers(): Result<List<User>>
     suspend fun loadCachedConnectedUsers(): Result<List<User>>
     fun observeConnectedUsers(): Flow<Result<List<User>>>
+    fun isPostMediaCached(post: Post): Boolean
+    suspend fun cachePostMedia(post: Post): Result<Unit>
     fun getFilteredPosts(posts: List<Post>, filter: FeedFilter): List<Post>
 }

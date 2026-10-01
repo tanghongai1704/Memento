@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -22,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
@@ -41,9 +44,11 @@ import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
@@ -64,14 +69,20 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tangai.memento.domain.model.Post
 import com.tangai.memento.domain.model.User
+import com.tangai.memento.domain.model.LayoutType
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.presentation.viewmodel.HomeViewModel
 import java.io.File
+import java.text.DateFormat
+import java.util.Date
 import com.tangai.memento.ui.PhotoLayout
+import com.tangai.memento.ui.MissingPhotoState
 import com.tangai.memento.ui.MementoScreenHeader
 import coil3.compose.AsyncImage
 
@@ -295,12 +306,18 @@ fun HomeScreen(
                         key = { post -> "${post.connectionId}:${post.id}" }
                     ) { post ->
                         val author = viewModel.getPostAuthor(post)
+                        val postKey = uiState.postKey(post)
                         PostCard(
                             post = post,
                             author = author,
+                            authorLabel = uiState.authorLabelFor(post),
+                            sharingLabel = uiState.sharingLabelFor(post),
                             mediaCacheRevision = uiState.mediaCacheRevision,
+                            isMediaLoading = postKey in uiState.loadingMediaPostKeys,
+                            isMediaFailed = postKey in uiState.failedMediaPostKeys,
                             canDelete = viewModel.canDelete(post),
-                            isDeleting = "${post.connectionId}:${post.id}" in uiState.deletingPostKeys,
+                            isDeleting = postKey in uiState.deletingPostKeys,
+                            onRetryMedia = { viewModel.retryPostMedia(post) },
                             onDelete = { pendingDelete = post }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -491,9 +508,14 @@ private fun FeedFilterChip(
 fun PostCard(
     post: Post,
     author: User?,
+    authorLabel: String,
+    sharingLabel: String,
     mediaCacheRevision: Long,
+    isMediaLoading: Boolean,
+    isMediaFailed: Boolean,
     canDelete: Boolean,
     isDeleting: Boolean,
+    onRetryMedia: () -> Unit,
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
@@ -505,18 +527,23 @@ fun PostCard(
             ).takeIf(File::exists)
         }
     }
-    val displayName = author?.displayName?.takeIf(String::isNotBlank) ?: "Unknown author"
-    val username = author?.username?.takeIf(String::isNotBlank)
     val sharedAt = post.createdAt ?: post.clientCreatedAt
-    val relativeTime = remember(sharedAt) {
-        DateUtils.getRelativeTimeSpanString(
-            sharedAt,
-            System.currentTimeMillis(),
-            DateUtils.MINUTE_IN_MILLIS
-        ).toString()
+    val displayTime = remember(sharedAt) {
+        formatPostTime(sharedAt, System.currentTimeMillis())
     }
     var menuExpanded by remember { mutableStateOf(false) }
     var captionExpanded by remember(post.id) { mutableStateOf(false) }
+    var previewStartIndex by remember(post.id) { mutableStateOf<Int?>(null) }
+
+    previewStartIndex?.let { initialPage ->
+        PhotoPreviewDialog(
+            media = cachedMedia,
+            initialPage = initialPage,
+            contentDescription = post.caption ?: "Shared photo",
+            onDismiss = { previewStartIndex = null }
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -532,25 +559,35 @@ fun PostCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 UserAvatar(
                     imageModel = author?.avatarPath,
-                    fallbackLabel = displayName.firstOrNull()?.uppercase() ?: "?",
+                    fallbackLabel = authorLabel.firstOrNull()?.uppercase() ?: "?",
                     size = 40.dp
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = displayName,
+                        text = authorLabel,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = "${username?.let { "@$it" } ?: "@unknown"} · $relativeTime",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = sharingLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "· $displayTime",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
                 }
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
@@ -614,12 +651,127 @@ fun PostCard(
                 }
                 Spacer(modifier = Modifier.height(10.dp))
             }
-            PhotoLayout(
-                media = cachedMedia,
-                layoutType = post.layoutType,
-                contentDescription = post.caption ?: "Shared photo",
-                modifier = Modifier.fillMaxWidth()
-            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                PhotoLayout(
+                    media = cachedMedia,
+                    layoutType = post.layoutType,
+                    contentDescription = post.caption ?: "Shared photo",
+                    modifier = Modifier.fillMaxWidth(),
+                    onPhotoClick = { index -> previewStartIndex = index },
+                    missingPhotoState = if (isMediaLoading || !isMediaFailed) {
+                        MissingPhotoState.LOADING
+                    } else {
+                        MissingPhotoState.UNAVAILABLE
+                    },
+                    onRetry = onRetryMedia
+                )
+                if (post.mediaItems.size > 1 && post.layoutType != LayoutType.CAROUSEL) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.84f),
+                        contentColor = MaterialTheme.colorScheme.inverseOnSurface
+                    ) {
+                        Text(
+                            text = "${post.mediaItems.size} photos",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatPostTime(timestamp: Long, now: Long): String {
+    val age = (now - timestamp).coerceAtLeast(0L)
+    return if (age < DateUtils.WEEK_IN_MILLIS) {
+        DateUtils.getRelativeTimeSpanString(
+            timestamp,
+            now,
+            DateUtils.MINUTE_IN_MILLIS
+        ).toString()
+    } else {
+        DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(timestamp))
+    }
+}
+
+@Composable
+private fun PhotoPreviewDialog(
+    media: List<Any?>,
+    initialPage: Int,
+    contentDescription: String,
+    onDismiss: () -> Unit
+) {
+    if (media.isEmpty()) return
+    val pagerState = rememberPagerState(
+        initialPage = initialPage.coerceIn(media.indices),
+        pageCount = media::size
+    )
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) { page ->
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(vertical = 72.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val item = media[page]
+                        if (item != null) {
+                            AsyncImage(
+                                model = item,
+                                contentDescription = "$contentDescription ${page + 1}",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = "Photo unavailable offline",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(20.dp)
+                ) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Close photo preview")
+                }
+
+                if (media.size > 1) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ) {
+                        Text(
+                            text = "${pagerState.currentPage + 1}/${media.size}",
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

@@ -368,6 +368,35 @@ class HomeRepositoryImpl @Inject constructor(
         connections.loadCachedConnectionUsers().map { it.users }
     override fun observeConnectedUsers() = connections.observeConnections()
 
+    override fun isPostMediaCached(post: Post): Boolean =
+        post.mediaItems.isNotEmpty() && post.mediaItems.all { media ->
+            val file = cachedMediaFile(post.connectionId, post.id, media.mediaId)
+            file.exists() && file.length() == media.sizeBytes
+        }
+
+    override suspend fun cachePostMedia(post: Post): Result<Unit> = runCatching {
+        postSyncMutex.withLock {
+            post.mediaItems.forEach { media ->
+                cacheMedia(
+                    MediaItemEntity(
+                        connectionId = post.connectionId,
+                        postId = post.id,
+                        mediaId = media.mediaId,
+                        mediaType = media.mediaType,
+                        storagePath = media.storagePath,
+                        thumbnailPath = media.thumbnailPath,
+                        mimeType = media.mimeType,
+                        width = media.width,
+                        height = media.height,
+                        durationMs = media.durationMs,
+                        sizeBytes = media.sizeBytes,
+                        position = media.position
+                    )
+                )
+            }
+        }
+    }
+
     override fun getFilteredPosts(posts: List<Post>, filter: FeedFilter): List<Post> =
         posts.filter { filter is FeedFilter.All || (filter is FeedFilter.Connection && it.connectionId == filter.connectionId) }
             .sortedByDescending { it.createdAt ?: it.clientCreatedAt }

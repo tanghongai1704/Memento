@@ -2,6 +2,7 @@ package com.tangai.memento.feature.home.presentation.viewmodel
 
 import com.tangai.memento.domain.model.Post
 import com.tangai.memento.domain.model.Connection
+import com.tangai.memento.domain.model.ConnectionType
 import com.tangai.memento.domain.model.User
 import com.tangai.memento.feature.home.domain.FeedFilter
 
@@ -13,6 +14,9 @@ data class HomeUiState(
     val authorProfiles: Map<String, User> = emptyMap(),
     val selectedFilter: FeedFilter = FeedFilter.All,
     val mediaCacheRevision: Long = 0,
+    val currentUserId: String? = null,
+    val loadingMediaPostKeys: Set<String> = emptySet(),
+    val failedMediaPostKeys: Set<String> = emptySet(),
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val connectionIdsWithMore: Set<String> = emptySet(),
@@ -51,6 +55,25 @@ data class HomeUiState(
     fun labelFor(connection: Connection): String = connectionLabels[connection.id]
         ?: connection.name?.takeIf { it.isNotBlank() }
         ?: "Direct connection"
+
+    fun authorLabelFor(post: Post): String = if (post.authorId == currentUserId) {
+        "You"
+    } else {
+        authorProfiles[post.authorId]?.displayName?.takeIf(String::isNotBlank)
+            ?: "Unknown author"
+    }
+
+    fun sharingLabelFor(post: Post): String {
+        val connection = connections.firstOrNull { it.id == post.connectionId }
+        return when {
+            connection?.type == ConnectionType.GROUP -> "Shared in ${labelFor(connection)}"
+            post.authorId == currentUserId && connection != null -> "Shared with ${labelFor(connection)}"
+            post.authorId == currentUserId -> "Shared privately"
+            else -> "Shared with you"
+        }
+    }
+
+    fun postKey(post: Post): String = "${post.connectionId}:${post.id}"
 }
 
 private const val HOME_SUGGESTION_LIMIT = 5

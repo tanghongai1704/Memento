@@ -7,6 +7,8 @@
   },
   "scripts": {
     "build": "tsc",
+    "create:test-users": "node scripts/create-test-users.mjs",
+    "connect:test-users": "node scripts/connect-test-users.mjs",
     "test": "npm run build && node --test test/*.test.js",
     "test:emulator": "npm run build && firebase emulators:exec --project demo-memento-schema --only firestore \"node test/invite-emulator.js\"",
     "test:storage-rules": "firebase emulators:exec --project demo-memento-schema --only firestore,storage \"node test/storage-rules.js\""

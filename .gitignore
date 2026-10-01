@@ -39,6 +39,8 @@ ui-debug.log
 functions/node_modules/
 functions/lib/
 functions/.secret.local
+*service-account*.json
+*firebase-adminsdk*.json
 
 # Local Firebase audit reports and snapshots
 .local/
