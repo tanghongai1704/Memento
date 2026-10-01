@@ -34,7 +34,7 @@ fun ConnectionScreen(viewModel: ConnectionViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = viewModel::cancelDisconnect,
             title = { Text("Disconnect from ${disconnectTarget.displayName}?") },
-            text = { Text("Shared moments from this connection will no longer be available. Reconnecting later starts a new history.") },
+            text = { Text("Shared moments from this connection will no longer be available. Reconnecting later starts a new shared timeline.") },
             confirmButton = {
                 TextButton(
                     onClick = viewModel::confirmDisconnect,

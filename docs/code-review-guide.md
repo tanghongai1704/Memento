@@ -12,7 +12,7 @@ Tài liệu này mô tả code trong repository hiện tại. Cách đọc một
 2. `MainActivity.onCreate()` gọi `MementoNavGraph()`.
 3. `MementoNavGraph` khai báo toàn bộ màn hình và chuyển route.
 4. Route đầu tiên là `Splash`; sau khi kiểm tra session sẽ đi `Login` hoặc `Home`.
-5. Sau đăng nhập, thanh điều hướng chính gồm Home, Connections, nút tạo Post, History và Profile.
+5. Sau đăng nhập, thanh điều hướng chính gồm Home, Connections, nút tạo Post và Profile.
 
 Đọc tại:
 
@@ -160,10 +160,10 @@ Flow đầu-cuối:
 
 ### Chọn recipient và ảnh
 
-1. Nút `+` tại navigation mở `CreatePostScreen`.
+1. Nút `+` tại navigation mở flow `CreatePost` trên `MediaPickerScreen`.
 2. `CreatePostViewModel` tải connection ACTIVE, user label và draft PENDING/FAILED gần nhất.
-3. User chọn connection; app dùng `connectionId`, không dùng userId làm recipient.
-4. `MediaPickerScreen` dùng Android photo picker; `MediaPreviewScreen` cho xem/xóa ảnh, chọn layout và nhập caption.
+3. Connection đầu tiên được chọn mặc định; user có thể đổi tại **Sharing with**. App dùng `connectionId`, không dùng userId làm recipient.
+4. Cùng một màn hình mở Android photo picker, cho xem/thêm/xóa ảnh, chọn layout và nhập caption.
 5. Một post nhận 1–5 IMAGE. Một ảnh dùng SINGLE; nhiều ảnh dùng GRID, COLLAGE hoặc CAROUSEL.
 
 ### Prepare local draft
@@ -245,19 +245,7 @@ Flow:
 - `functions/src/cleanupCore.ts`, `cleanupService.ts`
 - `functions/src/index.ts` — scheduled `cleanupExpiredMedia`
 
-## 8. History
-
-Flow hiện tại còn đơn giản:
-
-1. `HistoryScreen` gọi `HistoryViewModel.loadHistory()`.
-2. `HistoryRepositoryImpl.loadHistory()` đọc Room qua `PostDao` và trả danh sách `Post`.
-3. `HistoryScreen` render caption, thời gian và ảnh bằng `PhotoLayout` từ file cache local.
-
-DAO và model đã có nền tảng để phân biệt author/media/time, nhưng UI bộ lọc My Posts/Received, PHOTO/VIDEO và khoảng thời gian chưa hoàn thiện như một feature đầy đủ.
-
-Đọc tại `HistoryScreen.kt` → `HistoryViewModel.loadHistory` → `HistoryRepositoryImpl.loadHistory` → `PostDao.kt`.
-
-## 9. Room và schema nên đọc thế nào
+## 8. Room và schema nên đọc thế nào
 
 Đọc theo thứ tự:
 
@@ -270,7 +258,7 @@ DAO và model đã có nền tảng để phân biệt author/media/time, nhưng
 
 Các bảng chính: `users`, `connections`, `connection_members`, `posts`, `media_items`. Post/media dùng khóa ghép theo connection để cùng một ID không bị đọc nhầm giữa connection.
 
-## 10. Checklist review từng feature
+## 9. Checklist review từng feature
 
 Khi review một flow, lần theo đủ các câu hỏi sau:
 
@@ -285,7 +273,7 @@ Khi review một flow, lần theo đủ các câu hỏi sau:
 9. File tạm/cache được xóa ở success, failure, delete và revoke access hay chưa?
 10. Firestore/Storage Rules có thực sự chặn client bypass Cloud Function hay không?
 
-## 11. Thứ tự đọc đề xuất
+## 10. Thứ tự đọc đề xuất
 
 Để nắm dự án nhanh nhất:
 
@@ -298,8 +286,8 @@ Khi review một flow, lần theo đủ các câu hỏi sau:
 7. Delete/disconnect/cleanup: `lifecycleService.ts`, `cleanupService.ts`.
 8. Cuối cùng đọc rules, migrations và test để xác nhận invariant.
 
-## 12. Phần đã có và phần chưa hoàn thiện
+## 11. Phần đã có và phần chưa hoàn thiện
 
 Đã có trong code: email/password auth, profile, invite code cố định, DIRECT connection, realtime connection/profile, disconnect, post PHOTO 1–5 ảnh với bốn layout, draft/retry, upload/finalize idempotent, realtime post sync, pagination, download cache, soft delete và scheduled cleanup.
 
-Chưa hoàn thiện hoặc chưa có: GROUP connection/invite, VIDEO, UI History filter đầy đủ, avatar upload và các trải nghiệm production sâu hơn như retry nền bằng WorkManager.
+Chưa hoàn thiện hoặc chưa có: GROUP connection/invite, VIDEO, bộ lọc Home nâng cao, avatar upload và các trải nghiệm production sâu hơn như retry nền bằng WorkManager.

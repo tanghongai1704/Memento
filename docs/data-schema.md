@@ -48,7 +48,7 @@ Tạo postId/mediaId trước upload; giữ nguyên khi retry. Luồng đã tri�
 
 Draft upload hợp lệ nằm trong Room với `localSyncStatus = PENDING | FAILED`, giữ nguyên `postId`, `mediaId`, metadata và file JPEG riêng của app. Sau process death, Create Post khôi phục draft mới nhất và đưa người dùng thẳng tới `Resume pending upload`; retry ghi lại cùng Storage path rồi gọi finalize idempotent. Draft thiếu media hoặc file sai byte size được dọn local vì không thể retry. Người dùng có thể xác nhận discard; object đã upload nhưng chưa finalize được backend cleanup sau thời gian chờ.
 
-Splash chỉ dùng profile Room làm fallback khi Firebase báo lỗi mạng và Auth vẫn còn đúng UID; permission/data error không được che bằng cache. Feed/History tiếp tục được chặn bằng membership local của UID hiện tại.
+Splash chỉ dùng profile Room làm fallback khi Firebase báo lỗi mạng và Auth vẫn còn đúng UID; permission/data error không được che bằng cache. Feed Home tiếp tục được chặn bằng membership local của UID hiện tại.
 
 Scheduled Function `cleanupExpiredMedia` chạy mỗi ngày lúc 03:00 `Asia/Ho_Chi_Minh`. Nó chỉ nhận path chính xác `connections/{connectionId}/posts/{postId}/{mediaId}.jpg`; object phải cũ ít nhất 7 ngày. Orphan không có Post được xóa, hoặc media của Post `DELETED` chỉ được xóa khi `deletedAt` cũng đã qua 7 ngày và `mediaItems.storagePath` khớp. Bài ACTIVE, path ngoài phạm vi, media mới và Post metadata luôn được giữ.
 

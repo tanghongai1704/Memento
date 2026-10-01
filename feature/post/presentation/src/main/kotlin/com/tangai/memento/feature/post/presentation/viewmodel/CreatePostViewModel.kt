@@ -59,7 +59,7 @@ class CreatePostViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     recipients = emptyList(),
                     isLoading = false,
-                    errorMessage = error.message ?: "Could not load your connections."
+                    errorMessage = "We couldn’t load your connections. Check your connection and try again."
                 )
                 return@launch
             }
@@ -70,13 +70,19 @@ class CreatePostViewModel @Inject constructor(
             }
             val connectedUsersById = connectedUsers.associateBy { it.id }
             val pending = postRepository.getLatestPendingPhoto().getOrNull()
+            val selectedRecipient = pending?.post?.connectionId
+                ?.let { id -> recipients.find { it.id == id } }
+                ?: _uiState.value.selectedRecipient
+                    ?.id
+                    ?.let { id -> recipients.find { it.id == id } }
+                ?: recipients.firstOrNull()
             _uiState.value = _uiState.value.copy(
                 recipients = recipients,
                 recipientLabels = recipients.associate { connection ->
                     connection.id to connection.displayLabel(connectedUsersById)
                 },
                 recipientUsers = connectionUsers(recipients, connectedUsersById),
-                selectedRecipient = pending?.post?.connectionId?.let { id -> recipients.find { it.id == id } },
+                selectedRecipient = selectedRecipient,
                 selectedMedia = pending?.localUris?.mapIndexed { index, uri ->
                         LocalMediaItem(
                             uri = uri,
@@ -101,29 +107,19 @@ class CreatePostViewModel @Inject constructor(
         )
     }
 
-    fun setDefaultRecipient(user: Connection) {
-        _uiState.value = _uiState.value.copy(selectedRecipient = user)
-    }
-
-    fun addSelectedMedia(media: LocalMediaItem) {
-        val mediaWithName = media.copy(displayName = media.displayName.ifEmpty { "media_${System.currentTimeMillis()}" })
-        val selected = (_uiState.value.selectedMedia + mediaWithName.copy(type = MediaType.IMAGE))
-            .distinctBy(LocalMediaItem::uri)
-            .take(MAX_PHOTOS_PER_POST)
-        _uiState.value = _uiState.value.copy(
-            selectedMedia = selected,
-            selectedLayout = if (selected.size == 1) LayoutType.SINGLE else LayoutType.GRID,
-            pendingPhoto = null,
-            errorMessage = null,
-            successMessage = null
-        )
-    }
-
     fun setSelectedMedia(media: List<LocalMediaItem>) {
         val selected = media.distinctBy(LocalMediaItem::uri).take(MAX_PHOTOS_PER_POST)
+        val selectedLayout = when {
+            selected.size <= 1 -> LayoutType.SINGLE
+            _uiState.value.selectedLayout == LayoutType.SINGLE -> LayoutType.GRID
+            _uiState.value.selectedLayout == LayoutType.COLLAGE && selected.size >= MAX_PHOTOS_PER_POST -> {
+                LayoutType.GRID
+            }
+            else -> _uiState.value.selectedLayout
+        }
         _uiState.value = _uiState.value.copy(
             selectedMedia = selected,
-            selectedLayout = if (selected.size <= 1) LayoutType.SINGLE else LayoutType.GRID,
+            selectedLayout = selectedLayout,
             pendingPhoto = null,
             errorMessage = null,
             successMessage = null
@@ -158,15 +154,17 @@ class CreatePostViewModel @Inject constructor(
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(
                         selectedMedia = emptyList(),
+                        selectedLayout = LayoutType.SINGLE,
+                        caption = "",
                         pendingPhoto = null,
                         uploadProgress = 0f,
                         errorMessage = null,
-                        successMessage = "Pending photo discarded."
+                        successMessage = null
                     )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = error.message ?: "Could not discard the pending photo."
+                        errorMessage = "We couldn’t start over. Please try again."
                     )
                 }
         }
@@ -188,7 +186,7 @@ class CreatePostViewModel @Inject constructor(
                 isProcessing = _uiState.value.pendingPhoto == null,
                 isUploading = false,
                 processingProgress = 0f,
-                processingMessage = "Resizing and compressing photos…",
+                processingMessage = "Getting your moment ready…",
                 errorMessage = null,
                 successMessage = null
             )
@@ -205,7 +203,7 @@ class CreatePostViewModel @Inject constructor(
             if (pending == null) {
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    errorMessage = pendingResult.exceptionOrNull()?.message ?: "Could not prepare the photo."
+                    errorMessage = "We couldn’t prepare your photos. Please try again."
                 )
                 return@launch
             }
@@ -235,8 +233,12 @@ class CreatePostViewModel @Inject constructor(
                 isUploading = false,
                 uploadProgress = if (result.isSuccess) 1f else _uiState.value.uploadProgress,
                 pendingPhoto = if (result.isSuccess) null else pending,
-                successMessage = if (result.isSuccess) "Photo posted." else null,
-                errorMessage = result.exceptionOrNull()?.message
+                successMessage = null,
+                errorMessage = if (result.isFailure) {
+                    "Couldn’t post. Check your connection and try again."
+                } else {
+                    null
+                }
             )
             result.getOrNull()?.let(onSuccess)
         }

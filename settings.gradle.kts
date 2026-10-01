@@ -50,7 +50,3 @@ include(":feature:connection:presentation")
 include(":feature:post:domain")
 include(":feature:post:data")
 include(":feature:post:presentation")
-
-include(":feature:history:domain")
-include(":feature:history:data")
-include(":feature:history:presentation")

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
@@ -14,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,12 +35,9 @@ import com.tangai.memento.feature.auth.presentation.ui.SplashScreen
 import com.tangai.memento.feature.auth.presentation.viewmodel.LogoutEffect
 import com.tangai.memento.feature.auth.presentation.viewmodel.LogoutViewModel
 import com.tangai.memento.feature.connection.presentation.ui.ConnectionScreen
-import com.tangai.memento.feature.history.presentation.ui.HistoryScreen
 import com.tangai.memento.feature.home.presentation.ui.HomeScreen
 import com.tangai.memento.feature.home.presentation.ui.ProfileScreen
-import com.tangai.memento.feature.post.presentation.ui.CreatePostScreen
 import com.tangai.memento.feature.post.presentation.ui.MediaPickerScreen
-import com.tangai.memento.feature.post.presentation.ui.MediaPreviewScreen
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
@@ -56,13 +51,11 @@ fun MementoNavGraph(
     val showBottomBar = currentRoute in setOf(
         MementoRoute.Home.route,
         MementoRoute.Connection.route,
-        MementoRoute.History.route,
         MementoRoute.Profile.route
     )
     val navItems = listOf(
         Triple(MementoRoute.Home, Icons.Filled.Home, "Home"),
         Triple(MementoRoute.Connection, Icons.Filled.People, "Connections"),
-        Triple(MementoRoute.History, Icons.Filled.History, "History"),
         Triple(MementoRoute.Profile, Icons.Filled.Person, "Profile")
     )
 
@@ -73,11 +66,8 @@ fun MementoNavGraph(
             val protectedRoutes = setOf(
                 MementoRoute.Home.route,
                 MementoRoute.Connection.route,
-                MementoRoute.History.route,
                 MementoRoute.Profile.route,
-                MementoRoute.CreatePost.route,
-                MementoRoute.MediaPicker.route,
-                MementoRoute.MediaPreview.route
+                MementoRoute.CreatePost.route
             )
             if (firebaseAuth.currentUser == null && route in protectedRoutes) {
                 navController.navigate(MementoRoute.Login.route) {
@@ -215,10 +205,6 @@ fun MementoNavGraph(
                     ConnectionScreen()
                 }
 
-                composable(MementoRoute.History.route) {
-                    HistoryScreen()
-                }
-
                 composable(MementoRoute.Profile.route) {
                     val logoutViewModel: LogoutViewModel = hiltViewModel()
                     LaunchedEffect(Unit) {
@@ -240,55 +226,18 @@ fun MementoNavGraph(
                 }
 
                 composable(MementoRoute.CreatePost.route) {
-                    val createPostViewModel: com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel = hiltViewModel()
-                    CreatePostScreen(
-                        viewModel = createPostViewModel,
-                        onNavigateToMediaPicker = {
-                            navController.navigate(MementoRoute.MediaPicker.route)
-                        },
-                        onNavigateToPreview = {
-                            navController.navigate(MementoRoute.MediaPreview.route)
-                        },
-                        onNavigateToConnections = {
-                            navController.navigate(MementoRoute.Connection.route) {
-                                popUpTo(MementoRoute.Home.route) { saveState = true }
-                            }
-                        },
-                        onNavigateBack = {
-                            navController.popBackStack()
-                        }
-                    )
-                }
-
-                composable(MementoRoute.MediaPicker.route) { backStackEntry ->
-                    val parentEntry = remember(backStackEntry) {
-                        navController.getBackStackEntry(MementoRoute.CreatePost.route)
-                    }
-                    val createPostViewModel: com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel = hiltViewModel(parentEntry)
                     MediaPickerScreen(
-                        viewModel = createPostViewModel,
-                        onNavigateToPreview = {
-                            navController.navigate(MementoRoute.MediaPreview.route)
-                        },
-                        onNavigateBack = {
-                            navController.popBackStack()
-                        }
-                    )
-                }
-
-                composable(MementoRoute.MediaPreview.route) { backStackEntry ->
-                    val parentEntry = remember(backStackEntry) {
-                        navController.getBackStackEntry(MementoRoute.CreatePost.route)
-                    }
-                    val createPostViewModel: com.tangai.memento.feature.post.presentation.viewmodel.CreatePostViewModel = hiltViewModel(parentEntry)
-                    MediaPreviewScreen(
-                        viewModel = createPostViewModel,
                         onNavigateBack = {
                             navController.popBackStack()
                         },
                         onNavigateToHome = {
                             navController.navigate(MementoRoute.Home.route) {
                                 popUpTo(MementoRoute.Home.route) { inclusive = true }
+                            }
+                        },
+                        onNavigateToConnections = {
+                            navController.navigate(MementoRoute.Connection.route) {
+                                popUpTo(MementoRoute.Home.route) { saveState = true }
                             }
                         }
                     )

@@ -69,11 +69,11 @@ Gói một `Post` đã có ID/metadata với URI của file JPEG đã xử lý t
 
 Đọc tại `feature/post/domain/.../PendingPhotoPost.kt`.
 
-## 3. Chọn nơi đăng và chọn ảnh
+## 3. Tạo moment trên một màn hình
 
 ### 3.1 Mở flow tạo post
 
-Nút `+` trong `MementoNavGraph` điều hướng tới `CreatePost`. Từ đây người dùng chọn một DIRECT connection đang ACTIVE.
+Nút `+` trong `MementoNavGraph` điều hướng tới `CreatePost`, nơi `MediaPickerScreen` gom toàn bộ thao tác chọn người nhận, chọn ảnh, đổi layout, viết caption và đăng. Connection ACTIVE đầu tiên được chọn mặc định; người dùng có thể đổi tại mục **Sharing with**.
 
 `CreatePostViewModel` tải:
 
@@ -84,7 +84,7 @@ Nút `+` trong `MementoNavGraph` điều hướng tới `CreatePost`. Từ đây
 Điểm đọc code:
 
 - `app/src/main/java/com/tangai/memento/navigation/MementoNavGraph.kt`
-- `feature/post/presentation/.../ui/CreatePostScreen.kt`
+- `feature/post/presentation/.../ui/MediaPickerScreen.kt`
 - `feature/post/presentation/.../viewmodel/CreatePostViewModel.kt` — khối `init`
 
 ### 3.2 Chọn ảnh và layout
@@ -96,16 +96,15 @@ ViewModel:
 1. Bổ sung display name nếu thiếu.
 2. Chỉ nhận tối đa 5 item IMAGE khác URI.
 3. Dùng SINGLE cho một ảnh và GRID mặc định khi có nhiều ảnh.
-4. Cho đổi giữa GRID, COLLAGE và CAROUSEL ở Preview.
+4. Cho đổi giữa GRID, COLLAGE và CAROUSEL ngay trên cùng màn hình.
 5. Xóa reference tới pending cũ trong UI state khi user chọn bộ ảnh mới.
 
-`MediaPreviewScreen` dùng chung `PhotoLayout` với Home/History, cho chọn layout, nhập caption hoặc bỏ bộ ảnh đã chọn. Caption được giới hạn 1.000 ký tự ngay ở `onCaptionChanged()`.
+`MediaPickerScreen` dùng chung `PhotoLayout` với Home, đồng thời cho thêm/xóa ảnh, chọn layout, nhập caption hoặc bỏ bộ ảnh đã chọn mà không phải chuyển màn hình. Caption được giới hạn 1.000 ký tự ngay ở `onCaptionChanged()`.
 
 Điểm đọc code:
 
 - `MediaPickerScreen.kt`
-- `MediaPreviewScreen.kt`
-- `CreatePostViewModel.kt` — `addSelectedMedia`, `removeSelectedMedia`, `onCaptionChanged`
+- `CreatePostViewModel.kt` — `setSelectedMedia`, `removeSelectedMedia`, `onCaptionChanged`
 
 ## 4. Khi bấm đăng
 

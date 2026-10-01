@@ -11,14 +11,13 @@ Tài liệu này là snapshot hiện trạng, không phải nhật ký theo đ�
 - Feed Room-first, realtime sync phía nhận, tải/cache media, phân trang 20 bài cho mỗi connection và filter All/từng connection.
 - Soft delete có tombstone; cleanup Storage cho orphan/media đã xóa sau grace period.
 - Offline fallback cho profile/feed đã cache; cache media giới hạn dung lượng và có guard theo UID/membership.
-- History hiển thị post thật và các layout ảnh từ Room.
 
 ## Chưa triển khai hoặc chưa hoàn thiện
 
 - GROUP connection/invite và chính sách lịch sử cho group.
 - VIDEO upload/transcode/playback.
 - Avatar upload.
-- UI filter History theo My/Received, loại post và khoảng thời gian dù DAO đã có nền tảng.
+- Bộ lọc Home nâng cao theo chiều gửi/nhận, loại post và khoảng thời gian dù DAO đã có nền tảng.
 - Retry nền tự động; hiện người dùng chủ động retry hoặc discard draft.
 - Hard-delete metadata Firestore và cơ chế thu hồi bản sao đã được lưu ngoài app.
 
@@ -26,7 +25,7 @@ Tài liệu này là snapshot hiện trạng, không phải nhật ký theo đ�
 
 - Client không được tự ghi connection, membership, invite lookup hoặc Post remote; mutation đi qua Callable Functions.
 - `postId`, `mediaId`, Storage path và nội dung draft không đổi qua retry.
-- Home/History chỉ đọc post ACTIVE trong connection/membership ACTIVE của UID hiện tại.
+- Home chỉ đọc post ACTIVE trong connection/membership ACTIVE của UID hiện tại.
 - Disconnect tạo ranh giới lịch sử: kết nối lại dùng connection ID mới và không mở lại dữ liệu cũ.
 - Cleanup chỉ xử lý path hợp lệ sau grace period; không xóa media của post ACTIVE.
 

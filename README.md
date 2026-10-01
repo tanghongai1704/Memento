@@ -10,7 +10,7 @@
 - Mỗi post hỗ trợ 1–5 ảnh JPEG với layout SINGLE, GRID, COLLAGE hoặc CAROUSEL. Ảnh được sửa EXIF, resize, nén, upload tuần tự và finalize qua backend.
 - Draft PENDING/FAILED được giữ để retry cùng ID sau khi app bị đóng. Ảnh phía nhận được tải vào cache riêng của app để xem lại offline.
 - Tác giả có thể soft-delete post; một trong hai thành viên có thể disconnect. Scheduled cleanup dọn orphan và media của post đã xóa sau grace period.
-- Chưa triển khai GROUP, VIDEO, avatar upload, bộ lọc History đầy đủ hoặc retry nền bằng WorkManager.
+- Chưa triển khai GROUP, VIDEO, avatar upload, bộ lọc Home nâng cao hoặc retry nền bằng WorkManager.
 
 ## Chạy và kiểm tra
 

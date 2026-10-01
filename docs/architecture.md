@@ -22,13 +22,11 @@ Create Post chọn một connection ACTIVE và 1–5 ảnh. `PhotoProcessor` s�
 
 Callable `finalizePhotoPost` xác minh metadata object thật và dùng Firestore transaction để tạo Post, cập nhật `connection.lastPostAt`. Retry giữ nguyên ID, path và nội dung nên idempotent; lỗi được giữ ở trạng thái FAILED để khôi phục sau khi mở lại app.
 
-## Feed, History và offline
+## Feed và offline
 
 `HomeRepository` theo dõi connection ACTIVE. Với mỗi connection, nó listen trang 20 post mới nhất và một query tombstone DELETED, upsert metadata vào Room, tải ảnh về cache riêng rồi phát feed từ Room. Pagination có cursor riêng cho từng connection; Home lọc All hoặc theo connection.
 
-`HistoryRepository` hiện chỉ đọc các post ACTIVE mà UID hiện tại còn membership ACTIVE. DAO đã hỗ trợ filter theo tác giả, loại post và thời gian, nhưng History UI chưa expose các bộ lọc đó.
-
-Room là nguồn hiển thị cho Home/History. Splash có thể dùng profile cache khi Firebase lỗi mạng và session vẫn thuộc đúng UID. Cache media có giới hạn 200 MiB, nhưng chưa có TTL; quyền remote bị thu hồi ngay khi disconnect còn bản sao người dùng đã lưu ngoài app không thể bị thu hồi.
+Room là nguồn hiển thị cho Home. Splash có thể dùng profile cache khi Firebase lỗi mạng và session vẫn thuộc đúng UID. Cache media có giới hạn 200 MiB, nhưng chưa có TTL; quyền remote bị thu hồi ngay khi disconnect còn bản sao người dùng đã lưu ngoài app không thể bị thu hồi. DAO vẫn có thể hỗ trợ các bộ lọc nâng cao trực tiếp trong Home khi sản phẩm cần mở rộng.
 
 ## Xóa và cleanup
 
@@ -36,6 +34,6 @@ Tác giả gọi `softDeletePost`; backend đánh dấu DELETED thay vì xóa do
 
 ## Giới hạn
 
-GROUP và VIDEO có enum/schema dự phòng nhưng chưa có flow sản phẩm. Chưa có avatar upload, History filter đầy đủ hoặc retry upload nền bằng WorkManager. Room chỉ có migration đã kiểm chứng từ v2 lên v3; không dùng destructive fallback cho database cũ không được hỗ trợ.
+GROUP và VIDEO có enum/schema dự phòng nhưng chưa có flow sản phẩm. Chưa có avatar upload, bộ lọc Home nâng cao hoặc retry upload nền bằng WorkManager. Room chỉ có migration đã kiểm chứng từ v2 lên v3; không dùng destructive fallback cho database cũ không được hỗ trợ.
 
 Chi tiết trường dữ liệu ở [data-schema](data-schema.md), lifecycle ảnh ở [photo-post-lifecycle](photo-post-lifecycle.md), và bản đồ code ở [code-review-guide](code-review-guide.md).

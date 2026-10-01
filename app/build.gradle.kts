@@ -61,9 +61,6 @@ dependencies {
     implementation(project(":feature:post:presentation"))
     implementation(project(":feature:post:data"))
     implementation(project(":feature:post:domain"))
-    implementation(project(":feature:history:presentation"))
-    implementation(project(":feature:history:data"))
-    implementation(project(":feature:history:domain"))
     
     // Compose and UI
     implementation(platform(libs.androidx.compose.bom))

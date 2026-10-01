@@ -2,8 +2,6 @@ package com.tangai.memento.di
 
 import com.tangai.memento.feature.auth.data.AuthRepositoryImpl
 import com.tangai.memento.feature.auth.domain.AuthRepository
-import com.tangai.memento.feature.history.data.HistoryRepositoryImpl
-import com.tangai.memento.feature.history.domain.HistoryRepository
 import com.tangai.memento.feature.home.data.HomeRepositoryImpl
 import com.tangai.memento.feature.home.domain.HomeRepository
 import com.tangai.memento.feature.post.data.PostRepositoryImpl
@@ -30,9 +28,4 @@ abstract class AppModule {
     abstract fun bindPostRepository(
         impl: PostRepositoryImpl
     ): PostRepository
-
-    @Binds
-    abstract fun bindHistoryRepository(
-        impl: HistoryRepositoryImpl
-    ): HistoryRepository
 }
