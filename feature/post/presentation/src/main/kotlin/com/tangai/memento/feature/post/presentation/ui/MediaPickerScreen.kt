@@ -99,13 +99,11 @@ fun MediaPickerScreen(
     val selectedMediaState = rememberUpdatedState(uiState.selectedMedia)
     val supportsPickerPreselection = supportsPickerPreselection()
     val isBusy = uiState.isProcessing || uiState.isUploading
-    val isDraftLocked = uiState.pendingPhoto != null
-    val canEdit = !isBusy && !isDraftLocked
+    val canEdit = !isBusy
     val isKeyboardVisible = WindowInsets.isImeVisible
     var showRecipientPicker by remember { mutableStateOf(false) }
-    var confirmDiscard by remember { mutableStateOf(false) }
     var confirmExit by remember { mutableStateOf(false) }
-    val hasUnsavedChanges = !isDraftLocked && (
+    val hasUnsavedChanges = (
         uiState.selectedMedia.isNotEmpty() || uiState.caption.isNotBlank()
     )
     val requestBack = {
@@ -152,34 +150,6 @@ fun MediaPickerScreen(
                 showRecipientPicker = false
             },
             onDismiss = { showRecipientPicker = false }
-        )
-    }
-
-    if (confirmDiscard) {
-        AlertDialog(
-            onDismissRequest = { confirmDiscard = false },
-            title = { Text("Start over?") },
-            text = {
-                Text("This removes the current attempt so you can choose different photos or people. Your original photos stay on your device.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmDiscard = false
-                        viewModel.discardPendingPhoto()
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Start over")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDiscard = false }) {
-                    Text("Keep moment")
-                }
-            }
         )
     }
 
@@ -244,14 +214,6 @@ fun MediaPickerScreen(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        if (isDraftLocked && !isBusy) {
-                            OutlinedButton(
-                                onClick = { confirmDiscard = true },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Start over")
-                            }
-                        }
                         Button(
                             onClick = {
                                 focusManager.clearFocus()
@@ -274,7 +236,6 @@ fun MediaPickerScreen(
                                 when {
                                     uiState.isProcessing -> "Preparing…"
                                     uiState.isUploading -> "Posting…"
-                                    isDraftLocked -> "Retry post"
                                     uiState.selectedMedia.isEmpty() -> "Add photos to post"
                                     else -> "Post moment"
                                 }

@@ -163,7 +163,7 @@ Flow đầu-cuối:
 ### Chọn recipient và ảnh
 
 1. Nút `+` tại navigation mở flow `CreatePost` trên `MediaPickerScreen`.
-2. `CreatePostViewModel` tải connection ACTIVE, user label và draft PENDING/FAILED gần nhất.
+2. `CreatePostViewModel` tải connection ACTIVE và user label; queue dùng chung khôi phục các draft PENDING/FAILED.
 3. Connection đầu tiên được chọn mặc định; user có thể đổi tại **Sharing with**. App dùng `connectionId`, không dùng userId làm recipient.
 4. Cùng một màn hình mở Android photo picker, cho xem/thêm/xóa ảnh, chọn layout và nhập caption.
 5. Một post nhận 1–5 IMAGE. Một ảnh dùng SINGLE; nhiều ảnh dùng GRID, COLLAGE hoặc CAROUSEL.
@@ -172,12 +172,12 @@ Flow đầu-cuối:
 
 Khi xác nhận:
 
-1. `CreatePostViewModel.confirmAndUploadSelectedMedia()` gọi `PostRepository.preparePhotoPost()`.
+1. `CreatePostViewModel.confirmAndUploadSelectedMedia()` thêm yêu cầu vào `PostUploadQueue` rồi điều hướng khỏi màn hình tạo bài.
 2. Repository kiểm tra user, connection và membership đều ACTIVE.
 3. Tạo cố định `postId` và một `mediaId` cho mỗi ảnh.
 4. `PhotoProcessor.process()` lần lượt đọc URI, sửa EXIF orientation, scale cạnh tối đa và nén JPEG vào private app storage.
 5. Lưu `PostEntity` trạng thái `PENDING` cùng các `MediaItemEntity` trong Room.
-6. Draft này sống qua lúc app bị đóng; lần mở sau `getLatestPendingPhoto()` khôi phục để retry.
+6. Draft này sống qua lúc app bị đóng; lần mở sau `getPendingPhotos()` khôi phục toàn bộ danh sách để retry.
 
 ### Upload và finalize remote
 
@@ -192,7 +192,8 @@ Khi xác nhận:
 Đọc tại:
 
 - `CreatePostViewModel.kt` — `confirmAndUploadSelectedMedia`
-- `PostRepositoryImpl.kt` — `preparePhotoPost`, `uploadPendingPhoto`, `getLatestPendingPhoto`, `discardPendingPhoto`
+- `PostUploadQueue.kt` — thứ tự prepare/upload, retry và discard
+- `PostRepositoryImpl.kt` — `preparePhotoPost`, `uploadPendingPhoto`, `getPendingPhotos`, `discardPendingPhoto`
 - `PhotoProcessor.kt` — `process`
 - `core/database/.../dao/PostDao.kt`
 - `storage.rules`

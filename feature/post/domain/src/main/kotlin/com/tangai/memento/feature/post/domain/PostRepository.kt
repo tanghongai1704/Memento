@@ -18,7 +18,7 @@ interface PostRepository {
         onProgress: (Float) -> Unit
     ): Result<Post>
 
-    suspend fun getLatestPendingPhoto(): Result<PendingPhotoPost?>
+    suspend fun getPendingPhotos(): Result<List<PendingPhotoPost>>
 
     suspend fun discardPendingPhoto(pending: PendingPhotoPost): Result<Unit>
 }

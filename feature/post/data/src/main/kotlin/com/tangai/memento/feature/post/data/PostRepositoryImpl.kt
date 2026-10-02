@@ -60,9 +60,6 @@ class PostRepositoryImpl @Inject constructor(
         onProgress: (Float) -> Unit
     ): Result<PendingPhotoPost> = withContext(ioDispatcher) { runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
-        check(getLatestPendingPhoto().getOrThrow() == null) {
-            "Finish or discard the pending photo before creating another one."
-        }
         require(media.size in 1..MAX_PHOTOS_PER_POST && media.all { it.type == MediaType.IMAGE }) {
             "Choose between 1 and $MAX_PHOTOS_PER_POST photos."
         }
@@ -112,7 +109,9 @@ class PostRepositoryImpl @Inject constructor(
                 originalSizeBytes = processedMedia.map { it.first.originalSizeBytes }
             )
         } catch (error: Throwable) {
-            database.postDao().updateSyncState(connectionId, postId, LocalSyncStatus.FAILED)
+            database.postDao().deleteLocalDraft(connectionId, postId)
+            photoProcessor.outputFile(connectionId, postId, "placeholder")
+                .parentFile?.deleteRecursively()
             throw error
         }
     } }
@@ -203,10 +202,10 @@ class PostRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getLatestPendingPhoto(): Result<PendingPhotoPost?> =
+    override suspend fun getPendingPhotos(): Result<List<PendingPhotoPost>> =
         withContext(ioDispatcher) { runSuspendCatching {
-            val uid = auth.currentUser?.uid ?: return@runSuspendCatching null
-            database.postDao().getRetryablePosts(uid).firstNotNullOfOrNull { entity ->
+            val uid = auth.currentUser?.uid ?: return@runSuspendCatching emptyList()
+            database.postDao().getRetryablePosts(uid).mapNotNull { entity ->
                 val media = database.postDao().getMedia(entity.connectionId, entity.id)
                     .sortedBy { it.position }
                 val files = media.map {

@@ -4,14 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.tangai.memento.domain.model.LocalMediaItem
-import com.tangai.memento.domain.model.MediaType
-import com.tangai.memento.domain.model.Post
 import com.tangai.memento.domain.model.Connection
 import com.tangai.memento.domain.model.LayoutType
 import com.tangai.memento.domain.model.User
 import com.tangai.memento.domain.model.displayLabel
-import com.tangai.memento.feature.post.domain.PendingPhotoPost
-import com.tangai.memento.feature.post.domain.PostRepository
+import com.tangai.memento.feature.post.presentation.upload.PostUploadQueue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -22,7 +19,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class CreatePostViewModel @Inject constructor(
-    private val postRepository: PostRepository,
+    private val postUploadQueue: PostUploadQueue,
     private val connectionRepository: com.tangai.memento.feature.connection.domain.ConnectionRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -42,8 +39,6 @@ class CreatePostViewModel @Inject constructor(
                     applyRecipients(
                         recipients = recipients,
                         connectedUsers = users,
-                        pending = _uiState.value.pendingPhoto,
-                        restoreDraft = false,
                         isLoading = false
                     )
                 }.onFailure {
@@ -85,15 +80,12 @@ class CreatePostViewModel @Inject constructor(
                 isLoading = !hasExistingContent,
                 errorMessage = null
             )
-            val pending = postRepository.getLatestPendingPhoto().getOrNull()
             val cachedRecipients = connectionRepository.loadCachedConnections().getOrDefault(emptyList())
             val cachedUsers = connectionRepository.loadCachedConnectionUsers()
                 .getOrNull()?.users.orEmpty()
             applyRecipients(
                 recipients = cachedRecipients,
                 connectedUsers = cachedUsers,
-                pending = pending,
-                restoreDraft = true,
                 isLoading = false
             )
         }
@@ -102,15 +94,11 @@ class CreatePostViewModel @Inject constructor(
     private fun applyRecipients(
         recipients: List<Connection>,
         connectedUsers: List<User>,
-        pending: PendingPhotoPost?,
-        restoreDraft: Boolean,
         isLoading: Boolean
     ) {
         val current = _uiState.value
         val connectedUsersById = connectedUsers.associateBy(User::id)
-        val selectedRecipient = pending?.post?.connectionId
-            ?.let { id -> recipients.find { it.id == id } }
-            ?: current.selectedRecipient?.id
+        val selectedRecipient = current.selectedRecipient?.id
                 ?.let { id -> recipients.find { it.id == id } }
             ?: initialRecipientId?.let { id -> recipients.find { it.id == id } }
             ?: recipients.firstOrNull()
@@ -121,25 +109,6 @@ class CreatePostViewModel @Inject constructor(
             },
             recipientUsers = connectionUsers(recipients, connectedUsersById),
             selectedRecipient = selectedRecipient,
-            selectedMedia = if (restoreDraft) {
-                pending?.localUris?.mapIndexed { index, uri ->
-                    LocalMediaItem(
-                        uri = uri,
-                        type = MediaType.IMAGE,
-                        displayName = "Pending photo ${index + 1}",
-                        processedSizeBytes = pending.post.mediaItems.getOrNull(index)?.sizeBytes ?: 0L
-                    )
-                }.orEmpty()
-            } else {
-                current.selectedMedia
-            },
-            selectedLayout = if (restoreDraft) {
-                pending?.post?.layoutType ?: LayoutType.SINGLE
-            } else {
-                current.selectedLayout
-            },
-            caption = if (restoreDraft) pending?.post?.caption.orEmpty() else current.caption,
-            pendingPhoto = if (restoreDraft) pending else current.pendingPhoto,
             isLoading = isLoading,
             errorMessage = null
         )
@@ -165,7 +134,6 @@ class CreatePostViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             selectedMedia = selected,
             selectedLayout = selectedLayout,
-            pendingPhoto = null,
             errorMessage = null,
             successMessage = null
         )
@@ -181,116 +149,34 @@ class CreatePostViewModel @Inject constructor(
         val selected = _uiState.value.selectedMedia.filterNot { it.uri == uri }
         _uiState.value = _uiState.value.copy(
             selectedMedia = selected,
-            selectedLayout = if (selected.size <= 1) LayoutType.SINGLE else _uiState.value.selectedLayout,
-            pendingPhoto = null
+            selectedLayout = if (selected.size <= 1) LayoutType.SINGLE else _uiState.value.selectedLayout
         )
     }
 
     fun clearSelectedMedia() {
         _uiState.value = _uiState.value.copy(
-            selectedMedia = emptyList(), selectedLayout = LayoutType.SINGLE, pendingPhoto = null
+            selectedMedia = emptyList(), selectedLayout = LayoutType.SINGLE
         )
-    }
-
-    fun discardPendingPhoto() {
-        val pending = _uiState.value.pendingPhoto ?: return
-        viewModelScope.launch {
-            postRepository.discardPendingPhoto(pending)
-                .onSuccess {
-                    _uiState.value = _uiState.value.copy(
-                        selectedMedia = emptyList(),
-                        selectedLayout = LayoutType.SINGLE,
-                        caption = "",
-                        pendingPhoto = null,
-                        uploadProgress = 0f,
-                        errorMessage = null,
-                        successMessage = null
-                    )
-                }
-                .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = "We couldn’t start over. Please try again."
-                    )
-                }
-        }
     }
 
     fun onCaptionChanged(value: String) {
         if (value.length <= 1000) _uiState.value = _uiState.value.copy(caption = value, errorMessage = null)
     }
 
-    fun confirmAndUploadSelectedMedia(onSuccess: (Post) -> Unit) {
+    fun confirmAndUploadSelectedMedia(onQueued: () -> Unit) {
         val recipient = _uiState.value.selectedRecipient
         val media = _uiState.value.selectedMedia
         if (recipient == null || media.isEmpty() || media.size > MAX_PHOTOS_PER_POST) {
             _uiState.value = _uiState.value.copy(errorMessage = "Choose a connection and 1–5 photos.")
             return
         }
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isProcessing = _uiState.value.pendingPhoto == null,
-                isUploading = false,
-                processingProgress = 0f,
-                processingMessage = "Getting your moment ready…",
-                errorMessage = null,
-                successMessage = null
-            )
-            val pendingResult = _uiState.value.pendingPhoto?.let { Result.success(it) }
-                ?: postRepository.preparePhotoPost(
-                    recipient.id,
-                    media,
-                    _uiState.value.selectedLayout,
-                    _uiState.value.caption
-                ) { progress ->
-                    _uiState.value = _uiState.value.copy(processingProgress = progress)
-                }
-            val pending = pendingResult.getOrNull()
-            if (pending == null) {
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    errorMessage = "We couldn’t prepare your photos. Please try again."
-                )
-                return@launch
-            }
-            _uiState.value = _uiState.value.copy(
-                pendingPhoto = pending,
-                selectedMedia = pending.localUris.mapIndexed { index, uri ->
-                    val original = media[index]
-                    val processedSize = pending.post.mediaItems[index].sizeBytes
-                    val originalSize = pending.originalSizeBytes.getOrNull(index)
-                        ?.takeIf { it > 0L }
-                        ?: original.originalSizeBytes
-                    original.copy(
-                        uri = uri,
-                        processedUri = uri,
-                        originalSizeBytes = originalSize,
-                        processedSizeBytes = processedSize,
-                        compressionRatio = if (originalSize > 0L) {
-                            processedSize.toFloat() / originalSize.toFloat()
-                        } else 1f
-                    )
-                },
-                isProcessing = false,
-                processingProgress = 1f,
-                isUploading = true,
-                uploadProgress = 0f
-            )
-            val result = postRepository.uploadPendingPhoto(pending) { progress ->
-                _uiState.value = _uiState.value.copy(uploadProgress = progress)
-            }
-            _uiState.value = _uiState.value.copy(
-                isUploading = false,
-                uploadProgress = if (result.isSuccess) 1f else _uiState.value.uploadProgress,
-                pendingPhoto = if (result.isSuccess) null else pending,
-                successMessage = null,
-                errorMessage = if (result.isFailure) {
-                    "Couldn’t post. Check your connection and try again."
-                } else {
-                    null
-                }
-            )
-            result.getOrNull()?.let(onSuccess)
-        }
+        postUploadQueue.enqueue(
+            connectionId = recipient.id,
+            media = media,
+            layoutType = _uiState.value.selectedLayout,
+            caption = _uiState.value.caption
+        )
+        onQueued()
     }
 
     private companion object {

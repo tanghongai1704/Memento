@@ -33,7 +33,7 @@ abstract class PostDao {
 
     @Query("""SELECT * FROM posts WHERE authorId = :authorId
         AND localSyncStatus IN ('PENDING', 'FAILED')
-        ORDER BY clientCreatedAt DESC""")
+        ORDER BY clientCreatedAt ASC""")
     abstract suspend fun getRetryablePosts(authorId: String): List<PostEntity>
 
     @Query("""UPDATE posts SET localSyncStatus = :syncStatus,

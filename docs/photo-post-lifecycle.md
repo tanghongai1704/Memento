@@ -35,7 +35,7 @@ Các trạng thái local quan trọng:
 ```text
 PENDING ──upload/finalize thành công──> SYNCED
    │
-   └──xử lý/upload/finalize lỗi──────> FAILED
+   └──upload/finalize lỗi────────────> FAILED
                                           │
                                           ├──retry thành công──> SYNCED
                                           └──discard───────────> xóa draft local
@@ -78,8 +78,9 @@ Nút `+` trong `MementoNavGraph` điều hướng tới `CreatePost`, nơi `Medi
 `CreatePostViewModel` tải:
 
 - danh sách connection từ `ConnectionRepository.getCurrentUserConnections()`;
-- profile người còn lại để tạo label;
-- draft PENDING/FAILED gần nhất từ `PostRepository.getLatestPendingPhoto()`.
+- profile người còn lại để tạo label.
+
+`UploadQueueViewModel` khởi động queue dùng chung và gọi `PostRepository.getPendingPhotos()` để khôi phục mọi draft PENDING/FAILED.
 
 Điểm đọc code:
 
@@ -97,7 +98,6 @@ ViewModel:
 2. Chỉ nhận tối đa 5 item IMAGE khác URI.
 3. Dùng SINGLE cho một ảnh và GRID mặc định khi có nhiều ảnh.
 4. Cho đổi giữa GRID, COLLAGE và CAROUSEL ngay trên cùng màn hình.
-5. Xóa reference tới pending cũ trong UI state khi user chọn bộ ảnh mới.
 
 `MediaPickerScreen` dùng chung `PhotoLayout` với Home, đồng thời cho thêm/xóa ảnh, chọn layout, nhập caption hoặc bỏ bộ ảnh đã chọn mà không phải chuyển màn hình. Caption được giới hạn 1.000 ký tự ngay ở `onCaptionChanged()`.
 
@@ -110,12 +110,9 @@ ViewModel:
 
 Entry point là `CreatePostViewModel.confirmAndUploadSelectedMedia()`.
 
-Hàm xử lý theo hai nhánh:
+Hàm thêm media/caption/recipient vào `PostUploadQueue` và điều hướng về Home ngay. Queue cấp ứng dụng tiếp tục prepare và upload dù user chuyển giữa Home, Connections, Profile hoặc mở màn hình tạo bài khác. Nhiều bài được upload tuần tự theo thứ tự đã thêm.
 
-- Chưa có draft: gọi `preparePhotoPost()` để xử lý ảnh và tạo draft.
-- Đã có `pendingPhoto`: dùng lại draft cũ, không tạo ID và không nén ảnh lần nữa.
-
-Sau khi có `PendingPhotoPost`, ViewModel gọi `uploadPendingPhoto()` và cập nhật `uploadProgress` cho UI.
+`PostUploadStatusBar` nằm phía trên nội dung chính, có thể mở rộng để xem từng bài, tiến độ, bài đang chờ và thao tác Retry/Retry all/Remove.
 
 Đọc tại `CreatePostViewModel.kt` — `confirmAndUploadSelectedMedia`.
 
@@ -128,14 +125,11 @@ Entry point: `PostRepositoryImpl.preparePhotoPost(connectionId, media, layoutTyp
 Repository kiểm tra:
 
 1. User vẫn đăng nhập.
-2. Không tồn tại draft PENDING/FAILED hợp lệ khác.
-3. Có 1–5 media và tất cả đều là IMAGE.
-4. Một ảnh bắt buộc SINGLE; nhiều ảnh bắt buộc GRID, COLLAGE hoặc CAROUSEL.
-5. Caption sau khi trim không vượt quá 1.000 ký tự.
-6. Connection trong Room là ACTIVE.
-7. Membership của UID hiện tại trong connection là ACTIVE.
-
-Nếu đang có draft, user phải đăng tiếp hoặc discard draft đó trước khi tạo post mới.
+2. Có 1–5 media và tất cả đều là IMAGE.
+3. Một ảnh bắt buộc SINGLE; nhiều ảnh bắt buộc GRID, COLLAGE hoặc CAROUSEL.
+4. Caption sau khi trim không vượt quá 1.000 ký tự.
+5. Connection trong Room là ACTIVE.
+6. Membership của UID hiện tại trong connection là ACTIVE.
 
 ### 5.2 Sinh ID một lần
 
@@ -157,7 +151,7 @@ Một `PostEntity` được lưu vào Room với:
 - `localSyncStatus = PENDING`;
 - `createdAt/updatedAt = null` vì server chưa xác nhận.
 
-Sau đó ảnh mới được xử lý. Nếu xử lý ảnh lỗi, record được đổi sang `FAILED`.
+Sau đó ảnh mới được xử lý. Nếu xử lý ảnh lỗi, record/file chưa hoàn chỉnh được xóa; item vẫn ở trạng thái lỗi trong queue của process hiện tại để user có thể retry bằng media đã chọn.
 
 Điểm đọc code:
 
@@ -312,32 +306,27 @@ Mọi exception trong khối upload/finalize đều gọi `updateSyncState(..., 
 
 ## 10. Khôi phục retry sau khi mở lại app
 
-Trong `CreatePostViewModel.init`, app gọi `getLatestPendingPhoto()`.
+`UploadQueueViewModel` khởi động `PostUploadQueue`, sau đó app gọi `getPendingPhotos()`.
 
-Repository lấy các post của UID có `localSyncStatus IN ('PENDING', 'FAILED')`, mới nhất trước. Với từng record:
+Repository lấy các post của UID có `localSyncStatus IN ('PENDING', 'FAILED')`, cũ nhất trước để giữ đúng thứ tự queue. Với từng record:
 
 1. Lấy media item tương ứng.
 2. Dựng lại đường dẫn file bằng `PhotoProcessor.outputFile()`.
 3. Kiểm tra có 1–5 media, đủ mọi file và size từng file đúng.
-4. Nếu hợp lệ, trả `PendingPhotoPost` cho UI.
+4. Nếu hợp lệ, trả `PendingPhotoPost` vào danh sách queue với trạng thái cần retry.
 5. Nếu không hợp lệ, xóa draft Room và cả thư mục file hỏng rồi xét draft tiếp theo.
 
-UI khôi phục:
-
-- recipient từ `connectionId`;
-- ảnh preview từ local URI;
-- caption cũ;
-- `pendingPhoto` để lần bấm đăng sau bỏ qua bước xử lý ảnh.
+Thanh upload hiển thị lại toàn bộ bài hợp lệ. User có thể retry từng bài, retry tất cả hoặc xóa bài khỏi thiết bị. Retry dùng lại `postId`, media metadata và file đã xử lý, không nén lại ảnh.
 
 Đọc tại:
 
 - `PostDao.kt` — `getRetryablePosts`
-- `PostRepositoryImpl.kt` — `getLatestPendingPhoto`
-- `CreatePostViewModel.kt` — khối `init`
+- `PostRepositoryImpl.kt` — `getPendingPhotos`
+- `PostUploadQueue.kt` — `start`, `retry`, `discard`
 
 ## 11. Discard draft
 
-User có thể bỏ draft PENDING/FAILED bằng `CreatePostViewModel.discardPendingPhoto()`.
+User có thể bỏ draft PENDING/FAILED từ danh sách mở rộng của `PostUploadStatusBar`.
 
 Repository:
 
@@ -364,12 +353,7 @@ Backend trả `createdAtMillis` và `updatedAtMillis`. Android chạy một Room
 
 File JPEG local không bị xóa ngay. Nó đồng thời là cache để Home của người gửi render ảnh mà không cần tải lại.
 
-ViewModel:
-
-- đặt progress thành 100%;
-- xóa `pendingPhoto`;
-- hiện thông báo thành công;
-- gọi callback điều hướng.
+Queue xóa item đã hoàn tất khỏi thanh trạng thái rồi tiếp tục item kế tiếp. Home nhận post mới qua realtime listener; việc điều hướng đã xảy ra ngay từ lúc item được thêm vào queue.
 
 ## 13. Đồng bộ post và tải ảnh ở thiết bị nhận
 
@@ -488,7 +472,7 @@ Grace period hiện là 7 ngày (`MEDIA_CLEANUP_GRACE_MS`). Khoảng chờ này 
 3. `PhotoProcessor.process()`.
 4. `PostRepositoryImpl.uploadPendingPhoto()`.
 5. `functions/src/postCore.ts` và `postService.ts`.
-6. `PostRepositoryImpl.getLatestPendingPhoto()` và `discardPendingPhoto()`.
+6. `PostUploadQueue` cùng `PostRepositoryImpl.getPendingPhotos()` và `discardPendingPhoto()`.
 7. `HomeRepositoryImpl.observePosts()` và `cacheMedia()`.
 8. `HomeRepositoryImpl.deletePost()` và `lifecycleService.softDeletePost()`.
 9. `cleanupService.ts` và `cleanupCore.ts`.

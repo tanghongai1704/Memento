@@ -3,6 +3,8 @@ package com.tangai.memento.navigation
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -43,6 +45,8 @@ import com.tangai.memento.feature.home.presentation.ui.ProfileScreen
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.presentation.viewmodel.HomeViewModel
 import com.tangai.memento.feature.post.presentation.ui.MediaPickerScreen
+import com.tangai.memento.feature.post.presentation.ui.PostUploadStatusBar
+import com.tangai.memento.feature.post.presentation.upload.UploadQueueViewModel
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
@@ -53,6 +57,8 @@ fun MementoNavGraph(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val uploadQueueViewModel: UploadQueueViewModel = hiltViewModel()
+    val uploadItems by uploadQueueViewModel.items.collectAsStateWithLifecycle()
     val selectedHomeConnectionId = if (currentRoute == MementoRoute.Home.route) {
         val homeViewModel: HomeViewModel = hiltViewModel(checkNotNull(backStackEntry))
         val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
@@ -141,11 +147,30 @@ fun MementoNavGraph(
                 }
             }
         ) { innerPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = MementoRoute.Splash.route,
-                modifier = androidx.compose.ui.Modifier.padding(innerPadding)
+            Column(
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
             ) {
+                if (currentRoute in setOf(
+                        MementoRoute.Home.route,
+                        MementoRoute.Connection.route,
+                        MementoRoute.Profile.route,
+                        MementoRoute.CreatePost.route
+                    )
+                ) {
+                    PostUploadStatusBar(
+                        items = uploadItems,
+                        onRetry = uploadQueueViewModel::retry,
+                        onRetryAll = uploadQueueViewModel::retryAll,
+                        onDiscard = uploadQueueViewModel::discard
+                    )
+                }
+                NavHost(
+                    navController = navController,
+                    startDestination = MementoRoute.Splash.route,
+                    modifier = androidx.compose.ui.Modifier.weight(1f)
+                ) {
                 composable(MementoRoute.Splash.route) {
                     SplashScreen(
                         onNavigateToLogin = {
@@ -292,6 +317,7 @@ fun MementoNavGraph(
                             }
                         }
                     )
+                }
                 }
             }
         }
