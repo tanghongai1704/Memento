@@ -2,13 +2,11 @@ package com.tangai.memento.feature.home.data
 
 import android.content.Context
 import androidx.room.withTransaction
-import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
-import com.google.firebase.storage.FileDownloadTask
 import com.google.firebase.storage.FirebaseStorage
 import com.tangai.memento.database.MementoDatabase
 import com.tangai.memento.database.model.MediaItemEntity
@@ -17,18 +15,22 @@ import com.tangai.memento.database.model.toDomain
 import com.tangai.memento.database.model.toEntity
 import com.tangai.memento.domain.model.*
 import com.tangai.memento.feature.home.domain.*
+import com.tangai.memento.network.awaitFirebaseStorageTask
+import com.tangai.memento.network.awaitFirebaseTask
+import com.tangai.memento.network.di.IoDispatcher
+import com.tangai.memento.network.runSuspendCatching
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlinx.coroutines.suspendCancellableCoroutine
 
 class HomeRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -37,7 +39,9 @@ class HomeRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val functions: FirebaseFunctions,
     private val storage: FirebaseStorage,
-    private val connections: com.tangai.memento.feature.connection.domain.ConnectionRepository) : HomeRepository {
+    private val connections: com.tangai.memento.feature.connection.domain.ConnectionRepository,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
+) : HomeRepository {
     private val postSyncMutex = Mutex()
     private val paginationLock = Any()
     private var paginationUid: String? = null
@@ -47,7 +51,7 @@ class HomeRepositoryImpl @Inject constructor(
     private val connectionCursors = mutableMapOf<String, DocumentSnapshot>()
     private val connectionHasMore = mutableMapOf<String, Boolean>()
 
-    override suspend fun loadPosts(): Result<List<Post>> = runCatching {
+    override suspend fun loadPosts(): Result<List<Post>> = runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         database.postDao().loadPosts(uid).also { check(auth.currentUser?.uid == uid) }
     }
@@ -82,6 +86,8 @@ class HomeRepositoryImpl @Inject constructor(
                 }
                 trySend(Result.success(currentPage(uid)))
                 cacheError?.let { trySend(Result.failure(it)) }
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Throwable) {
                 trySend(Result.failure(error))
             }
@@ -122,7 +128,7 @@ class HomeRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun loadOlderPosts(connectionId: String?): Result<PostFeedPage> = runCatching {
+    override suspend fun loadOlderPosts(connectionId: String?): Result<PostFeedPage> = runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         val target = synchronized(paginationLock) {
             if (paginationUid != uid) resetPagination(uid)
@@ -135,12 +141,12 @@ class HomeRepositoryImpl @Inject constructor(
                     null
                 }
             }
-        } ?: return@runCatching currentPage(uid)
+        } ?: return@runSuspendCatching currentPage(uid)
 
         check(auth.currentUser?.uid == uid) { "Account changed while loading older posts." }
         var query = activePostsQuery(uid, target.connectionId)
         target.cursor?.let { query = query.startAfter(it) }
-        val documents = query.limit(POST_PAGE_SIZE).get().awaitTask().documents
+        val documents = query.limit(POST_PAGE_SIZE).get().awaitFirebaseTask().documents
 
         val cacheError = postSyncMutex.withLock {
             cacheMediaItems(syncDocumentMetadata(documents))
@@ -165,27 +171,29 @@ class HomeRepositoryImpl @Inject constructor(
         currentPage(uid)
     }
 
-    override suspend fun deletePost(post: Post): Result<Unit> = runCatching {
+    override suspend fun deletePost(post: Post): Result<Unit> = runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         check(post.authorId == uid) { "Only the author can delete this post." }
         val response = functions.getHttpsCallable("softDeletePost")
             .call(mapOf("connectionId" to post.connectionId, "postId" to post.id))
-            .awaitTask().data.asMap()
+            .awaitFirebaseTask().data.asMap()
         val deletedAt = response.requiredLong("deletedAtMillis")
         val updatedAt = response.requiredLong("updatedAtMillis")
         check(auth.currentUser?.uid == uid) { "Account changed while deleting the post." }
         database.postDao().markDeleted(post.connectionId, post.id, uid, deletedAt, updatedAt)
-        post.mediaItems.forEach { media ->
-            cachedMediaFile(post.connectionId, post.id, media.mediaId).delete()
+        withContext(ioDispatcher) {
+            post.mediaItems.forEach { media ->
+                cachedMediaFile(post.connectionId, post.id, media.mediaId).delete()
+            }
         }
     }
 
-    override suspend fun loadUsers(userIds: Set<String>): Result<List<User>> = runCatching {
+    override suspend fun loadUsers(userIds: Set<String>): Result<List<User>> = runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         val cachedUsers = userIds.mapNotNull { database.userDao().getUserById(it)?.toDomain() }
             .associateBy(User::id)
         val remoteUsers = (userIds - cachedUsers.keys).mapNotNull { authorId ->
-            firestore.collection("users").document(authorId).get().awaitTask().toUser()
+            firestore.collection("users").document(authorId).get().awaitFirebaseTask().toUser()
         }
         check(auth.currentUser?.uid == uid) { "Account changed while loading authors." }
         remoteUsers.forEach { database.userDao().upsertUser(it.toEntity()) }
@@ -194,7 +202,7 @@ class HomeRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun loadCachedUsers(userIds: Set<String>): Result<List<User>> = runCatching {
+    override suspend fun loadCachedUsers(userIds: Set<String>): Result<List<User>> = runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         userIds.mapNotNull { database.userDao().getUserById(it)?.toDomain() }
             .also { check(auth.currentUser?.uid == uid) }
@@ -222,7 +230,9 @@ class HomeRepositoryImpl @Inject constructor(
             val status = PostStatus.valueOf(requireNotNull(document.getString("status")))
             val media = storePost(connectionId, document)
             if (status == PostStatus.DELETED) {
-                media.forEach { cachedMediaFile(it.connectionId, it.postId, it.mediaId).delete() }
+                withContext(ioDispatcher) {
+                    media.forEach { cachedMediaFile(it.connectionId, it.postId, it.mediaId).delete() }
+                }
             } else {
                 mediaToCache += media
             }
@@ -233,8 +243,13 @@ class HomeRepositoryImpl @Inject constructor(
     private suspend fun cacheMediaItems(mediaItems: List<MediaItemEntity>): Throwable? {
         var firstCacheError: Throwable? = null
         mediaItems.forEach { item ->
-            runCatching { cacheMedia(item) }
-                .onFailure { if (firstCacheError == null) firstCacheError = it }
+            try {
+                cacheMedia(item)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                if (firstCacheError == null) firstCacheError = error
+            }
         }
         return firstCacheError
     }
@@ -278,19 +293,19 @@ class HomeRepositoryImpl @Inject constructor(
         connectionHasMore.clear()
     }
 
-    private suspend fun cacheMedia(media: MediaItemEntity) {
-        if (media.mediaType != MediaType.IMAGE) return
+    private suspend fun cacheMedia(media: MediaItemEntity) = withContext(ioDispatcher) {
+        if (media.mediaType != MediaType.IMAGE) return@withContext
         val output = cachedMediaFile(media.connectionId, media.postId, media.mediaId)
         if (output.exists() && output.length() == media.sizeBytes) {
             output.setLastModified(System.currentTimeMillis())
-            return
+            return@withContext
         }
 
         output.parentFile?.mkdirs()
         val partial = File(output.parentFile, "${output.name}.download")
         if (partial.exists()) partial.delete()
         try {
-            storage.reference.child(media.storagePath).getFile(partial).awaitDownload()
+            storage.reference.child(media.storagePath).getFile(partial).awaitFirebaseStorageTask()
             check(partial.length() == media.sizeBytes) { "Downloaded photo size does not match its post." }
             if (output.exists()) check(output.delete()) { "Could not replace the cached photo." }
             check(partial.renameTo(output)) { "Could not move the downloaded photo into cache." }
@@ -327,12 +342,12 @@ class HomeRepositoryImpl @Inject constructor(
                 if (file.delete()) totalBytes -= size
             }
     }
-    override suspend fun loadConnections(): Result<List<Connection>> = runCatching {
+    override suspend fun loadConnections(): Result<List<Connection>> = runSuspendCatching {
         connections.getCurrentUserConnections().getOrThrow()
         loadCachedConnections().getOrThrow()
     }
 
-    override suspend fun loadCachedConnections(): Result<List<Connection>> = runCatching {
+    override suspend fun loadCachedConnections(): Result<List<Connection>> = runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("User is not signed in.")
         database.connectionMemberDao().getActiveMembershipsForUser(uid).mapNotNull { member ->
             database.connectionDao().getConnectionById(member.connectionId)
@@ -354,13 +369,17 @@ class HomeRepositoryImpl @Inject constructor(
         connections.loadCachedConnectionUsers().map { it.users }
     override fun observeConnectedUsers() = connections.observeConnections()
 
-    override fun isPostMediaCached(post: Post): Boolean =
-        post.mediaItems.isNotEmpty() && post.mediaItems.all { media ->
-            val file = cachedMediaFile(post.connectionId, post.id, media.mediaId)
-            file.exists() && file.length() == media.sizeBytes
+    override suspend fun loadCachedMedia(posts: List<Post>): Map<String, List<String?>> =
+        withContext(ioDispatcher) {
+            posts.associate { post ->
+                post.key() to post.mediaItems.sortedBy { it.position }.map { media ->
+                    val file = cachedMediaFile(post.connectionId, post.id, media.mediaId)
+                    file.absolutePath.takeIf { file.exists() && file.length() == media.sizeBytes }
+                }
+            }
         }
 
-    override suspend fun cachePostMedia(post: Post): Result<Unit> = runCatching {
+    override suspend fun cachePostMedia(post: Post): Result<Unit> = runSuspendCatching {
         postSyncMutex.withLock {
             post.mediaItems.forEach { media ->
                 cacheMedia(
@@ -453,6 +472,8 @@ class HomeRepositoryImpl @Inject constructor(
         "pending_media/$connectionId/$postId/$mediaId.jpg"
     )
 
+    private fun Post.key(): String = "$connectionId:$id"
+
     private companion object {
         const val POST_PAGE_SIZE = 20L
         const val DELETED_POST_PAGE_SIZE = 20L
@@ -464,16 +485,3 @@ class HomeRepositoryImpl @Inject constructor(
         val cursor: DocumentSnapshot?
     )
 }
-
-private suspend fun <T> Task<T>.awaitTask(): T =
-    suspendCancellableCoroutine { continuation ->
-        addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
-        addOnFailureListener { if (continuation.isActive) continuation.resumeWithException(it) }
-    }
-
-private suspend fun FileDownloadTask.awaitDownload(): FileDownloadTask.TaskSnapshot =
-    suspendCancellableCoroutine { continuation ->
-        addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
-        addOnFailureListener { if (continuation.isActive) continuation.resumeWithException(it) }
-        continuation.invokeOnCancellation { cancel() }
-    }

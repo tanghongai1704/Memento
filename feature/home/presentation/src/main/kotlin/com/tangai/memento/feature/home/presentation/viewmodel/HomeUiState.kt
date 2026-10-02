@@ -13,7 +13,7 @@ data class HomeUiState(
     val connectionUsers: Map<String, User> = emptyMap(),
     val authorProfiles: Map<String, User> = emptyMap(),
     val selectedFilter: FeedFilter = FeedFilter.All,
-    val mediaCacheRevision: Long = 0,
+    val cachedMediaByPostKey: Map<String, List<String?>> = emptyMap(),
     val currentUserId: String? = null,
     val loadingMediaPostKeys: Set<String> = emptySet(),
     val failedMediaPostKeys: Set<String> = emptySet(),

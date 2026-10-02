@@ -3,7 +3,6 @@ package com.tangai.memento.feature.post.data
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.room.withTransaction
-import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.firestore.FirebaseFirestore
@@ -12,7 +11,6 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import com.google.firebase.storage.StorageException
-import com.google.firebase.storage.UploadTask
 import com.tangai.memento.database.MementoDatabase
 import com.tangai.memento.database.model.MediaItemEntity
 import com.tangai.memento.database.model.PostEntity
@@ -29,16 +27,20 @@ import com.tangai.memento.domain.model.PostType
 import com.tangai.memento.feature.post.domain.PendingPhotoPost
 import com.tangai.memento.feature.post.domain.PostRepository
 import com.tangai.memento.network.NetworkStatusProvider
-import kotlinx.coroutines.suspendCancellableCoroutine
+import com.tangai.memento.network.awaitFirebaseStorageTask
+import com.tangai.memento.network.awaitFirebaseTask
+import com.tangai.memento.network.di.IoDispatcher
+import com.tangai.memento.network.runSuspendCatching
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 class PostRepositoryImpl @Inject constructor(
     private val database: MementoDatabase,
@@ -47,7 +49,8 @@ class PostRepositoryImpl @Inject constructor(
     private val storage: FirebaseStorage,
     private val functions: FirebaseFunctions,
     private val photoProcessor: PhotoProcessor,
-    private val networkStatusProvider: NetworkStatusProvider
+    private val networkStatusProvider: NetworkStatusProvider,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : PostRepository {
     override suspend fun preparePhotoPost(
         connectionId: String,
@@ -55,7 +58,7 @@ class PostRepositoryImpl @Inject constructor(
         layoutType: LayoutType,
         caption: String?,
         onProgress: (Float) -> Unit
-    ): Result<PendingPhotoPost> = withContext(Dispatchers.IO) { runCatching {
+    ): Result<PendingPhotoPost> = withContext(ioDispatcher) { runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
         check(getLatestPendingPhoto().getOrThrow() == null) {
             "Finish or discard the pending photo before creating another one."
@@ -92,20 +95,21 @@ class PostRepositoryImpl @Inject constructor(
                 val mediaId = UUID.randomUUID().toString()
                 val processed = photoProcessor.process(item.uri, connectionId, postId, mediaId)
                 onProgress((position + 1).toFloat() / media.size.toFloat())
-                MediaItemEntity(
+                processed to MediaItemEntity(
                     connectionId = connectionId, postId = postId, mediaId = mediaId,
                     mediaType = MediaType.IMAGE,
                     storagePath = storagePath(connectionId, postId, mediaId),
                     thumbnailPath = null, mimeType = "image/jpeg",
                     width = processed.width, height = processed.height,
                     durationMs = null, sizeBytes = processed.sizeBytes, position = position
-                ) to processed.file.toUri().toString()
+                )
             }
-            val mediaEntities = processedMedia.map { it.first }
+            val mediaEntities = processedMedia.map { it.second }
             database.postDao().upsertMedia(mediaEntities)
             PendingPhotoPost(
                 post = pendingEntity.toDomain(mediaEntities.map { it.toDomain() }),
-                localUris = processedMedia.map { it.second }
+                localUris = processedMedia.map { it.first.file.toUri().toString() },
+                originalSizeBytes = processedMedia.map { it.first.originalSizeBytes }
             )
         } catch (error: Throwable) {
             database.postDao().updateSyncState(connectionId, postId, LocalSyncStatus.FAILED)
@@ -116,7 +120,7 @@ class PostRepositoryImpl @Inject constructor(
     override suspend fun uploadPendingPhoto(
         pending: PendingPhotoPost,
         onProgress: (Float) -> Unit
-    ): Result<Post> = runCatching {
+    ): Result<Post> = runSuspendCatching {
         val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
         val post = pending.post
         check(post.authorId == uid) { "This pending post belongs to another account." }
@@ -124,9 +128,14 @@ class PostRepositoryImpl @Inject constructor(
         check(media.size in 1..MAX_PHOTOS_PER_POST && pending.localUris.size == media.size) {
             "A photo post contains an invalid number of media items."
         }
-        val localFiles = pending.localUris.map { File(requireNotNull(Uri.parse(it).path)) }
-        check(localFiles.zip(media).all { (file, item) -> file.exists() && file.length() == item.sizeBytes }) {
-            "The processed photo is missing. Please select it again."
+        val localFiles = withContext(ioDispatcher) {
+            pending.localUris.map { File(requireNotNull(Uri.parse(it).path)) }.also { files ->
+                check(files.zip(media).all { (file, item) ->
+                    file.exists() && file.length() == item.sizeBytes
+                }) {
+                    "The processed photo is missing. Please select it again."
+                }
+            }
         }
         check(networkStatusProvider.isOnline()) {
             "No internet connection. Your photo is saved on this device; reconnect and tap Retry upload."
@@ -141,7 +150,10 @@ class PostRepositoryImpl @Inject constructor(
                 withTimeout(UPLOAD_TIMEOUT_MS) {
                     storage.reference.child(item.storagePath)
                         .putFile(file.toUri(), metadata)
-                        .awaitUpload { itemProgress ->
+                        .awaitFirebaseStorageTask { snapshot ->
+                            val total = snapshot.totalByteCount.takeIf { it > 0 }
+                                ?: return@awaitFirebaseStorageTask
+                            val itemProgress = snapshot.bytesTransferred.toFloat() / total.toFloat()
                             onProgress((index + itemProgress) / media.size.toFloat())
                         }
                 }
@@ -164,7 +176,7 @@ class PostRepositoryImpl @Inject constructor(
                             "position" to item.position
                         )
                     }
-                )).awaitTask().data as? Map<*, *> ?: error("Unexpected publish response.")
+                )).awaitFirebaseTask().data as? Map<*, *> ?: error("Unexpected publish response.")
             }
             val createdAt = (response["createdAtMillis"] as? Number)?.toLong()
                 ?: error("Publish response is missing its timestamp.")
@@ -181,42 +193,54 @@ class PostRepositoryImpl @Inject constructor(
                 database.connectionDao().updateActivity(post.connectionId, createdAt, updatedAt)
             }
             post.copy(createdAt = createdAt, updatedAt = updatedAt)
+        } catch (error: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            database.postDao().updateSyncState(post.connectionId, post.id, LocalSyncStatus.FAILED)
+            throw error.asUploadError()
         } catch (error: Throwable) {
             database.postDao().updateSyncState(post.connectionId, post.id, LocalSyncStatus.FAILED)
             throw error.asUploadError()
         }
     }
 
-    override suspend fun getLatestPendingPhoto(): Result<PendingPhotoPost?> = runCatching {
-        val uid = auth.currentUser?.uid ?: return@runCatching null
-        database.postDao().getRetryablePosts(uid).firstNotNullOfOrNull { entity ->
-            val media = database.postDao().getMedia(entity.connectionId, entity.id).sortedBy { it.position }
-            val files = media.map { photoProcessor.outputFile(entity.connectionId, entity.id, it.mediaId) }
-            if (media.isEmpty() || media.size > MAX_PHOTOS_PER_POST ||
-                files.zip(media).any { (file, item) -> !file.exists() || file.length() != item.sizeBytes }) {
-                database.postDao().deleteLocalDraft(entity.connectionId, entity.id)
-                photoProcessor.outputFile(entity.connectionId, entity.id, "placeholder")
-                    .parentFile?.deleteRecursively()
-                null
-            } else {
-                PendingPhotoPost(
-                    entity.toDomain(media.map { it.toDomain() }),
-                    files.map { it.toUri().toString() }
-                )
+    override suspend fun getLatestPendingPhoto(): Result<PendingPhotoPost?> =
+        withContext(ioDispatcher) { runSuspendCatching {
+            val uid = auth.currentUser?.uid ?: return@runSuspendCatching null
+            database.postDao().getRetryablePosts(uid).firstNotNullOfOrNull { entity ->
+                val media = database.postDao().getMedia(entity.connectionId, entity.id)
+                    .sortedBy { it.position }
+                val files = media.map {
+                    photoProcessor.outputFile(entity.connectionId, entity.id, it.mediaId)
+                }
+                if (media.isEmpty() || media.size > MAX_PHOTOS_PER_POST ||
+                    files.zip(media).any { (file, item) ->
+                        !file.exists() || file.length() != item.sizeBytes
+                    }) {
+                    database.postDao().deleteLocalDraft(entity.connectionId, entity.id)
+                    photoProcessor.outputFile(entity.connectionId, entity.id, "placeholder")
+                        .parentFile?.deleteRecursively()
+                    null
+                } else {
+                    PendingPhotoPost(
+                        entity.toDomain(media.map { it.toDomain() }),
+                        files.map { it.toUri().toString() }
+                    )
+                }
             }
-        }
-    }
+        } }
 
-    override suspend fun discardPendingPhoto(pending: PendingPhotoPost): Result<Unit> = runCatching {
-        val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
-        check(pending.post.authorId == uid) { "This pending post belongs to another account." }
-        val deleted = database.postDao().deleteLocalDraft(pending.post.connectionId, pending.post.id)
-        check(deleted == 1) { "This post is no longer a local draft." }
-        pending.post.mediaItems.firstOrNull()?.let { media ->
-            photoProcessor.outputFile(pending.post.connectionId, pending.post.id, media.mediaId)
-                .parentFile?.deleteRecursively()
-        }
-    }
+    override suspend fun discardPendingPhoto(pending: PendingPhotoPost): Result<Unit> =
+        withContext(ioDispatcher) { runSuspendCatching {
+            val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
+            check(pending.post.authorId == uid) { "This pending post belongs to another account." }
+            val deleted = database.postDao().deleteLocalDraft(pending.post.connectionId, pending.post.id)
+            check(deleted == 1) { "This post is no longer a local draft." }
+            pending.post.mediaItems.firstOrNull()?.let { media ->
+                photoProcessor.outputFile(pending.post.connectionId, pending.post.id, media.mediaId)
+                    .parentFile?.deleteRecursively()
+            }
+            Unit
+        } }
 
     private fun storagePath(connectionId: String, postId: String, mediaId: String) =
         "connections/$connectionId/posts/$postId/$mediaId.jpg"
@@ -254,19 +278,3 @@ private fun Throwable.asUploadError(): Throwable = when (this) {
     }
     else -> this
 }
-
-private suspend fun <T> Task<T>.awaitTask(): T = suspendCancellableCoroutine { continuation ->
-    addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
-    addOnFailureListener { if (continuation.isActive) continuation.resumeWithException(it) }
-}
-
-private suspend fun UploadTask.awaitUpload(onProgress: (Float) -> Unit): UploadTask.TaskSnapshot =
-    suspendCancellableCoroutine { continuation ->
-        addOnProgressListener { snapshot ->
-            val total = snapshot.totalByteCount.takeIf { it > 0 } ?: return@addOnProgressListener
-            onProgress(snapshot.bytesTransferred.toFloat() / total.toFloat())
-        }
-        addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
-        addOnFailureListener { if (continuation.isActive) continuation.resumeWithException(it) }
-        continuation.invokeOnCancellation { cancel() }
-    }

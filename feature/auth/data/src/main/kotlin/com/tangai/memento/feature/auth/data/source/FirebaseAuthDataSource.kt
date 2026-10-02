@@ -10,7 +10,8 @@ import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.tangai.memento.feature.auth.data.model.AuthDataError
 import com.tangai.memento.feature.auth.data.model.AuthDataException
-import com.tangai.memento.feature.auth.data.source.util.awaitTask
+import com.tangai.memento.network.awaitFirebaseTask
+import com.tangai.memento.network.runSuspendCatching
 import javax.inject.Inject
 
 class FirebaseAuthDataSource @Inject constructor(
@@ -25,10 +26,10 @@ class FirebaseAuthDataSource @Inject constructor(
         password: String
     ): Result<Unit> {
         val normalizedEmail = email.trim()
-        return runCatching {
+        return runSuspendCatching {
             firebaseAuth
                 .signInWithEmailAndPassword(normalizedEmail, password)
-                .awaitTask()
+                .awaitFirebaseTask()
             Unit
         }.mapUnitError()
     }
@@ -38,19 +39,19 @@ class FirebaseAuthDataSource @Inject constructor(
         password: String
     ): Result<FirebaseUser> {
         val normalizedEmail = email.trim()
-        return runCatching {
+        return runSuspendCatching {
             val authResult = firebaseAuth
                 .createUserWithEmailAndPassword(normalizedEmail, password)
-                .awaitTask()
+                .awaitFirebaseTask()
             authResult.user ?: throw AuthDataException(AuthDataError.Unknown("User is null after sign-up."))
         }.mapError()
     }
 
     suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
-        return runCatching {
+        return runSuspendCatching {
             firebaseAuth
                 .sendPasswordResetEmail(email.trim())
-                .awaitTask()
+                .awaitFirebaseTask()
             Unit
         }.mapUnitError()
     }

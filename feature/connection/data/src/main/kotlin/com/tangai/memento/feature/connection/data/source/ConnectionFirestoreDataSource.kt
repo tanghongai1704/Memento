@@ -4,9 +4,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
-import com.tangai.memento.feature.auth.data.source.util.awaitTask
 import com.tangai.memento.feature.auth.data.mapper.toProfile
 import com.tangai.memento.domain.model.*
+import com.tangai.memento.network.awaitFirebaseTask
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -20,13 +20,13 @@ class ConnectionFirestoreDataSource @Inject constructor(
 ) {
     suspend fun redeemDirectInvite(code: String): String {
         val data = functions.getHttpsCallable("redeemDirectInvite")
-            .call(mapOf("code" to code)).awaitTask().data.asMap()
+            .call(mapOf("code" to code)).awaitFirebaseTask().data.asMap()
         return data["connectionId"] as? String ?: error("Redeem response is missing its connection.")
     }
 
     suspend fun disconnectDirect(connectionId: String): Long {
         val data = functions.getHttpsCallable("disconnectDirect")
-            .call(mapOf("connectionId" to connectionId)).awaitTask().data.asMap()
+            .call(mapOf("connectionId" to connectionId)).awaitFirebaseTask().data.asMap()
         return (data["updatedAtMillis"] as? Number)?.toLong()
             ?: error("Disconnect response is missing its timestamp.")
     }
@@ -37,8 +37,8 @@ class ConnectionFirestoreDataSource @Inject constructor(
             .whereArrayContains("memberIds", uid)
             .whereEqualTo("status", ConnectionStatus.ACTIVE.name)
             .orderBy("lastPostAt", Query.Direction.DESCENDING)
-            .get().awaitTask().documents.map { doc ->
-                val members = doc.reference.collection("members").get().awaitTask().documents.map { member ->
+            .get().awaitFirebaseTask().documents.map { doc ->
+                val members = doc.reference.collection("members").get().awaitFirebaseTask().documents.map { member ->
                     ConnectionMember(userId = member.id,
                         role = MemberRole.valueOf(requireNotNull(member.getString("role"))),
                         status = MemberStatus.valueOf(requireNotNull(member.getString("status"))),
@@ -89,13 +89,13 @@ class ConnectionFirestoreDataSource @Inject constructor(
     }
 
     suspend fun getUser(uid: String): User? =
-        firestore.collection("users").document(uid).get().awaitTask().toProfile()
+        firestore.collection("users").document(uid).get().awaitFirebaseTask().toProfile()
 
     suspend fun searchUsers(query: String): List<User> {
         val normalized = normalizeUsername(query)
         if (normalized.isBlank()) return emptyList()
         return firestore.collection("users").whereEqualTo("usernameNormalized", normalized)
-            .limit(20).get().awaitTask().documents.mapNotNull { it.toProfile() }
+            .limit(20).get().awaitFirebaseTask().documents.mapNotNull { it.toProfile() }
     }
 
     private fun Any?.asMap(): Map<*, *> = this as? Map<*, *>

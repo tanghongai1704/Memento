@@ -10,6 +10,9 @@ import com.tangai.memento.domain.model.*
 import com.tangai.memento.feature.connection.domain.CachedConnectionUsers
 import com.tangai.memento.feature.connection.data.source.ConnectionFirestoreDataSource
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
+import com.tangai.memento.network.di.IoDispatcher
+import com.tangai.memento.network.runSuspendCatching
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -27,13 +31,14 @@ class ConnectionRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: MementoDatabase,
     private val firebaseAuth: FirebaseAuth,
-    private val source: ConnectionFirestoreDataSource
+    private val source: ConnectionFirestoreDataSource,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : ConnectionRepository {
-    override suspend fun redeemDirectInvite(code: String): Result<String> = runCatching {
+    override suspend fun redeemDirectInvite(code: String): Result<String> = runSuspendCatching {
         source.redeemDirectInvite(code)
     }
 
-    override suspend fun disconnectDirect(connectionId: String): Result<Unit> = runCatching {
+    override suspend fun disconnectDirect(connectionId: String): Result<Unit> = runSuspendCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
         val updatedAt = source.disconnectDirect(connectionId)
         check(firebaseAuth.currentUser?.uid == uid) { "Account changed during disconnect." }
@@ -44,7 +49,7 @@ class ConnectionRepositoryImpl @Inject constructor(
         clearConnectionMediaCache(connectionId)
     }
 
-    override suspend fun getCurrentUserConnections(): Result<List<Connection>> = runCatching {
+    override suspend fun getCurrentUserConnections(): Result<List<Connection>> = runSuspendCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
         val connections = source.getConnectionsForCurrentUser()
         check(firebaseAuth.currentUser?.uid == uid) { "Account changed during sync." }
@@ -62,11 +67,11 @@ class ConnectionRepositoryImpl @Inject constructor(
                 connection.members.forEach { database.connectionMemberDao().upsertMember(it.toEntity(connection.id)) }
             }
         }
-        revokedConnectionIds.forEach(::clearConnectionMediaCache)
+        revokedConnectionIds.forEach { clearConnectionMediaCache(it) }
         connections
     }
 
-    override suspend fun loadCachedConnections(): Result<List<Connection>> = runCatching {
+    override suspend fun loadCachedConnections(): Result<List<Connection>> = runSuspendCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
         database.connectionMemberDao().getActiveMembershipsForUser(uid).mapNotNull { membership ->
             database.connectionDao().getConnectionById(membership.connectionId)
@@ -84,7 +89,7 @@ class ConnectionRepositoryImpl @Inject constructor(
         ).also { check(firebaseAuth.currentUser?.uid == uid) }
     }
 
-    override suspend fun loadConnections(): Result<List<User>> = runCatching {
+    override suspend fun loadConnections(): Result<List<User>> = runSuspendCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
         getCurrentUserConnections().getOrThrow().flatMap { it.members }
             .filter { it.status == MemberStatus.ACTIVE && it.userId != uid }
@@ -95,7 +100,7 @@ class ConnectionRepositoryImpl @Inject constructor(
             }
     }
 
-    override suspend fun loadCachedConnectionUsers(): Result<CachedConnectionUsers> = runCatching {
+    override suspend fun loadCachedConnectionUsers(): Result<CachedConnectionUsers> = runSuspendCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
         val cachedRows = database.connectionMemberDao()
             .getActiveMembershipsForUser(uid)
@@ -158,7 +163,7 @@ class ConnectionRepositoryImpl @Inject constructor(
             }
             .catch { emit(Result.failure(it)) }
 
-    override suspend fun searchUsers(query: String): Result<List<User>> = runCatching {
+    override suspend fun searchUsers(query: String): Result<List<User>> = runSuspendCatching {
         val uid = firebaseAuth.currentUser?.uid ?: error("User is not signed in.")
         source.searchUsers(query).filterNot { it.id == uid }.also { users ->
             check(firebaseAuth.currentUser?.uid == uid) { "Account changed during search." }
@@ -166,9 +171,11 @@ class ConnectionRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun clearConnectionMediaCache(connectionId: String) {
+    private suspend fun clearConnectionMediaCache(connectionId: String) {
         if (!connectionId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) return
-        File(context.filesDir, "pending_media/$connectionId").deleteRecursively()
+        withContext(ioDispatcher) {
+            File(context.filesDir, "pending_media/$connectionId").deleteRecursively()
+        }
     }
 
     private companion object {

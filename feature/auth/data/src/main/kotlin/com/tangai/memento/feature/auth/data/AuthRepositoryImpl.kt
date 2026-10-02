@@ -15,7 +15,8 @@ import com.tangai.memento.feature.auth.data.mapper.toDomainUser
 import com.tangai.memento.feature.auth.data.model.AuthDataError
 import com.tangai.memento.feature.auth.data.model.AuthDataException
 import com.tangai.memento.feature.auth.data.source.FirebaseAuthDataSource
-import com.tangai.memento.feature.auth.data.source.util.awaitTask
+import com.tangai.memento.network.awaitFirebaseTask
+import com.tangai.memento.network.runSuspendCatching
 import com.tangai.memento.feature.auth.domain.AuthRepository
 import com.tangai.memento.feature.auth.domain.model.RegisterError
 import com.tangai.memento.feature.auth.domain.model.RegisterException
@@ -39,7 +40,7 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun signUp(email: String, password: String): Result<User> {
         return firebaseAuthDataSource.signUp(email, password).fold(
             onSuccess = { firebaseUser ->
-                runCatching {
+                runSuspendCatching {
                     syncCurrentUserProfile().getOrThrow()
                     userDao.getUserById(firebaseUser.uid)!!.toDomain()
 
@@ -56,7 +57,7 @@ class AuthRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun syncCurrentUserProfile(): Result<Unit> = runCatching {
+    override suspend fun syncCurrentUserProfile(): Result<Unit> = runSuspendCatching {
         val authUser = firebaseAuthDataSource.currentUser()
             ?: error("User is not signed in.")
         val fallback = authUser.toDomainUser()
@@ -81,8 +82,8 @@ class AuthRepositoryImpl @Inject constructor(
                     "schemaVersion" to 1
                 ))
             }
-        }.awaitTask()
-        val profile = ref.get().awaitTask().toProfile() ?: error("Invalid user profile.")
+        }.awaitFirebaseTask()
+        val profile = ref.get().awaitFirebaseTask().toProfile() ?: error("Invalid user profile.")
         check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) { "Account changed during sync." }
         userDao.upsertUser(profile.toEntity())
         getCurrentUserInviteCode().getOrThrow()
@@ -92,13 +93,13 @@ class AuthRepositoryImpl @Inject constructor(
         if (!error.isOfflineFailure() || userDao.getUserById(uid) == null) throw error
     }
 
-    override suspend fun getCurrentUserProfile(): Result<User> = runCatching {
+    override suspend fun getCurrentUserProfile(): Result<User> = runSuspendCatching {
         val authUser = firebaseAuthDataSource.currentUser()
             ?: error("User is not signed in.")
         val profile = firestore.collection("users")
             .document(authUser.uid)
             .get()
-            .awaitTask()
+            .awaitFirebaseTask()
             .toProfile()
             ?: error("User profile is missing.")
         check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) {
@@ -108,15 +109,15 @@ class AuthRepositoryImpl @Inject constructor(
         profile
     }
 
-    override suspend fun getCachedCurrentUserProfile(): Result<User> = runCatching {
+    override suspend fun getCachedCurrentUserProfile(): Result<User> = runSuspendCatching {
         val uid = firebaseAuthDataSource.currentUser()?.uid ?: error("User is not signed in.")
         userDao.getUserById(uid)?.toDomain() ?: error("No cached profile is available.")
     }
 
-    override suspend fun getCurrentUserInviteCode(): Result<String> = runCatching {
+    override suspend fun getCurrentUserInviteCode(): Result<String> = runSuspendCatching {
         val uid = firebaseAuthDataSource.currentUser()?.uid ?: error("User is not signed in.")
         val data = functions.getHttpsCallable("getMyInviteCode")
-            .call().awaitTask().data as? Map<*, *> ?: error("Unexpected invite code response.")
+            .call().awaitFirebaseTask().data as? Map<*, *> ?: error("Unexpected invite code response.")
         check(firebaseAuthDataSource.currentUser()?.uid == uid) { "Account changed while loading invite code." }
         data["code"] as? String ?: error("Invite code response is missing its code.")
     }
@@ -125,7 +126,7 @@ class AuthRepositoryImpl @Inject constructor(
         displayName: String,
         username: String,
         bio: String?
-    ): Result<User> = runCatching {
+    ): Result<User> = runSuspendCatching {
         val cleanDisplayName = displayName.trim()
         val cleanUsername = username.trim()
         val cleanBio = bio?.trim()?.takeIf { it.isNotEmpty() }
@@ -155,7 +156,7 @@ class AuthRepositoryImpl @Inject constructor(
                 "updatedAt" to FieldValue.serverTimestamp(),
                 "schemaVersion" to 1
             ))
-        }.awaitTask()
+        }.awaitFirebaseTask()
         check(firebaseAuthDataSource.currentUser()?.uid == authUser.uid) {
             "Account changed while saving profile."
         }

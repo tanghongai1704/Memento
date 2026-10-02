@@ -13,7 +13,13 @@ import java.io.FileOutputStream
 import javax.inject.Inject
 import kotlin.math.max
 
-data class ProcessedPhoto(val file: File, val width: Int, val height: Int, val sizeBytes: Long)
+data class ProcessedPhoto(
+    val file: File,
+    val width: Int,
+    val height: Int,
+    val sizeBytes: Long,
+    val originalSizeBytes: Long
+)
 
 class PhotoProcessor @Inject constructor(@ApplicationContext private val context: Context) {
     fun outputFile(connectionId: String, postId: String, mediaId: String): File =
@@ -24,6 +30,10 @@ class PhotoProcessor @Inject constructor(@ApplicationContext private val context
         require(context.contentResolver.getType(uri)?.startsWith("image/") != false) {
             "Please choose an image."
         }
+        val originalSizeBytes = context.contentResolver
+            .openAssetFileDescriptor(uri, "r")
+            ?.use { descriptor -> descriptor.length.coerceAtLeast(0L) }
+            ?: 0L
         val decoded = decodeSampled(uri) ?: error("The selected image could not be opened.")
         val oriented = applyOrientation(decoded, readOrientation(uri))
         if (oriented !== decoded) decoded.recycle()
@@ -46,7 +56,13 @@ class PhotoProcessor @Inject constructor(@ApplicationContext private val context
             writeJpeg(bitmap, output, quality)
         }
         check(output.length() in 1..MAX_BYTES) { "The photo is still larger than 5 MiB after compression." }
-        return ProcessedPhoto(output, bitmap.width, bitmap.height, output.length()).also { bitmap.recycle() }
+        return ProcessedPhoto(
+            file = output,
+            width = bitmap.width,
+            height = bitmap.height,
+            sizeBytes = output.length(),
+            originalSizeBytes = originalSizeBytes
+        ).also { bitmap.recycle() }
     }
 
     private fun decodeSampled(uri: Uri): Bitmap? {

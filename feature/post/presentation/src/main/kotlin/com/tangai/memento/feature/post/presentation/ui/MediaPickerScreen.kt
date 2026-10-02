@@ -68,7 +68,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -95,7 +94,6 @@ fun MediaPickerScreen(
     onNavigateToConnections: () -> Unit,
     viewModel: CreatePostViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedMediaState = rememberUpdatedState(uiState.selectedMedia)
@@ -126,14 +124,10 @@ fun MediaPickerScreen(
     val photoLauncher = rememberLauncherForActivityResult(contract = pickerContract) { uris ->
         if (uris.isNotEmpty()) {
             val pickedMedia = uris.mapIndexed { index, uri ->
-                val originalSize = context.contentResolver.openAssetFileDescriptor(uri, "r")
-                    ?.use { it.length.coerceAtLeast(0L) }
-                    ?: 0L
                 LocalMediaItem(
                     uri = uri.toString(),
                     type = MediaType.IMAGE,
-                    displayName = "photo_${System.currentTimeMillis()}_$index",
-                    originalSizeBytes = originalSize
+                    displayName = "photo_${System.currentTimeMillis()}_$index"
                 )
             }
             viewModel.setSelectedMedia(

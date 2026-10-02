@@ -257,12 +257,16 @@ class CreatePostViewModel @Inject constructor(
                 selectedMedia = pending.localUris.mapIndexed { index, uri ->
                     val original = media[index]
                     val processedSize = pending.post.mediaItems[index].sizeBytes
+                    val originalSize = pending.originalSizeBytes.getOrNull(index)
+                        ?.takeIf { it > 0L }
+                        ?: original.originalSizeBytes
                     original.copy(
                         uri = uri,
                         processedUri = uri,
+                        originalSizeBytes = originalSize,
                         processedSizeBytes = processedSize,
-                        compressionRatio = if (original.originalSizeBytes > 0L) {
-                            processedSize.toFloat() / original.originalSizeBytes.toFloat()
+                        compressionRatio = if (originalSize > 0L) {
+                            processedSize.toFloat() / originalSize.toFloat()
                         } else 1f
                     )
                 },

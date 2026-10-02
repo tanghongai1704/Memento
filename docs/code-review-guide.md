@@ -4,6 +4,8 @@ Tài liệu này mô tả code trong repository hiện tại. Cách đọc một
 
 `Screen (sự kiện UI) → ViewModel (state/điều phối) → Repository interface → Repository implementation/data source → Room/Firebase → Cloud Function → cập nhật Room → UI nhận state mới`
 
+Khi review threading, kiểm tra UI không gọi `File`/`ContentResolver`, repository tự chuyển disk I/O sang injected IO dispatcher, và Firebase Task luôn xử lý đủ success/failure/canceled. Không dùng `runCatching` trực tiếp quanh suspend call nếu nó có thể nuốt `CancellationException`; project dùng `runSuspendCatching` cho trường hợp này.
+
 ## 1. Bản đồ tổng thể
 
 ### Điểm khởi động và điều hướng

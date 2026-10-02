@@ -2,6 +2,10 @@
 
 `app` quản lý navigation và binding Hilt. Mỗi feature tách `presentation`, `domain`, `data`; `core/domain` chứa model dùng chung, `core/database` chứa Room v3, `core/network` cung cấp Firebase/network status, `core/media` xử lý media dùng chung, `core/ui` và `core/designsystem` phục vụ Compose.
 
+Repository và data source phải main-safe. Room suspend API và Firebase async API được gọi trực tiếp; các thao tác blocking với `File`, `ContentResolver` và xử lý bitmap chạy bằng IO dispatcher được inject từ `core/network`. Presentation chỉ nhận URI/path media đã được data layer xác nhận, không tự dựng đường dẫn hoặc kiểm tra file.
+
+Mọi Firebase `Task` đi qua adapter coroutine dùng chung, bao phủ success, failure và canceled. Với Storage, coroutine caller bị hủy sẽ hủy transfer; Firebase tự hủy transfer được trả về như lỗi có thể retry. `CancellationException` của coroutine caller luôn được propagate, không chuyển thành lỗi nghiệp vụ.
+
 ## Nguyên tắc offline-first
 
 Với dữ liệu đã cache, UI luôn đọc và hiển thị Room trước; không chờ Firestore, Functions hoặc Storage để mở màn hình. Đồng bộ server chạy nền, ghi kết quả vào Room, rồi presentation đọc lại Room để cập nhật UI. Dữ liệu remote trả về không được dùng làm nguồn hiển thị song song với Room.

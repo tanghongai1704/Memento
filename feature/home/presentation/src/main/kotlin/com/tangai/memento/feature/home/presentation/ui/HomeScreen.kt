@@ -66,7 +66,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -78,7 +77,6 @@ import com.tangai.memento.domain.model.User
 import com.tangai.memento.domain.model.LayoutType
 import com.tangai.memento.feature.home.domain.FeedFilter
 import com.tangai.memento.feature.home.presentation.viewmodel.HomeViewModel
-import java.io.File
 import java.text.DateFormat
 import java.util.Date
 import com.tangai.memento.ui.PhotoLayout
@@ -312,7 +310,8 @@ fun HomeScreen(
                             author = author,
                             authorLabel = uiState.authorLabelFor(post),
                             sharingLabel = uiState.sharingLabelFor(post),
-                            mediaCacheRevision = uiState.mediaCacheRevision,
+                            cachedMedia = uiState.cachedMediaByPostKey[postKey]
+                                ?: List(post.mediaItems.size) { null },
                             isMediaLoading = postKey in uiState.loadingMediaPostKeys,
                             isMediaFailed = postKey in uiState.failedMediaPostKeys,
                             canDelete = viewModel.canDelete(post),
@@ -510,7 +509,7 @@ fun PostCard(
     author: User?,
     authorLabel: String,
     sharingLabel: String,
-    mediaCacheRevision: Long,
+    cachedMedia: List<String?>,
     isMediaLoading: Boolean,
     isMediaFailed: Boolean,
     canDelete: Boolean,
@@ -518,15 +517,6 @@ fun PostCard(
     onRetryMedia: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val context = LocalContext.current
-    val cachedMedia = remember(post, mediaCacheRevision) {
-        post.mediaItems.sortedBy { it.position }.map { media ->
-            File(
-                context.filesDir,
-                "pending_media/${post.connectionId}/${post.id}/${media.mediaId}.jpg",
-            ).takeIf(File::exists)
-        }
-    }
     val sharedAt = post.createdAt ?: post.clientCreatedAt
     val displayTime = remember(sharedAt) {
         formatPostTime(sharedAt, System.currentTimeMillis())

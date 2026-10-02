@@ -65,7 +65,6 @@ class HomeViewModel @Inject constructor(
                         connectionIdsWithMore = current.connectionIdsWithMore
                             .intersect(activeConnectionIds) +
                             (activeConnectionIds - previousActiveConnectionIds),
-                        mediaCacheRevision = current.mediaCacheRevision + 1,
                         errorMessage = null
                     )
                     ensurePostMedia(posts)
@@ -82,7 +81,6 @@ class HomeViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         posts = page.posts,
                         authorProfiles = authorProfiles,
-                        mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         isLoading = false,
                         hasMoreAllPosts = page.hasMorePosts,
                         connectionIdsWithMore = page.connectionIdsWithMore,
@@ -154,7 +152,6 @@ class HomeViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         posts = page.posts,
                         authorProfiles = loadCachedAuthorProfiles(page.posts),
-                        mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
                         isLoadingMore = false,
                         hasMoreAllPosts = page.hasMorePosts,
                         connectionIdsWithMore = page.connectionIdsWithMore,
@@ -192,7 +189,7 @@ class HomeViewModel @Inject constructor(
                         posts = posts,
                         authorProfiles = loadCachedAuthorProfiles(posts),
                         deletingPostKeys = _uiState.value.deletingPostKeys - postKey,
-                        mediaCacheRevision = _uiState.value.mediaCacheRevision + 1,
+                        cachedMediaByPostKey = _uiState.value.cachedMediaByPostKey - postKey,
                         errorMessage = null
                     )
                     refreshAuthorProfiles(posts)
@@ -222,11 +219,12 @@ class HomeViewModel @Inject constructor(
         downloadPostMedia(post)
     }
 
-    private fun ensurePostMedia(posts: List<Post>) {
+    private suspend fun ensurePostMedia(posts: List<Post>) {
         val activeKeys = posts.mapTo(mutableSetOf()) { it.key() }
-        val cachedKeys = posts.asSequence()
-            .filter(homeRepository::isPostMediaCached)
-            .mapTo(mutableSetOf()) { it.key() }
+        val cachedMedia = homeRepository.loadCachedMedia(posts)
+        val cachedKeys = cachedMedia.asSequence()
+            .filter { (_, media) -> media.isNotEmpty() && media.all { it != null } }
+            .mapTo(mutableSetOf()) { it.key }
         val current = _uiState.value
         val alreadyHandled = current.loadingMediaPostKeys + current.failedMediaPostKeys
         val missingPosts = posts.filter { post ->
@@ -235,7 +233,8 @@ class HomeViewModel @Inject constructor(
         _uiState.value = current.copy(
             loadingMediaPostKeys = (current.loadingMediaPostKeys intersect activeKeys) +
                 missingPosts.map { it.key() },
-            failedMediaPostKeys = (current.failedMediaPostKeys intersect activeKeys) - cachedKeys
+            failedMediaPostKeys = (current.failedMediaPostKeys intersect activeKeys) - cachedKeys,
+            cachedMediaByPostKey = cachedMedia
         )
         missingPosts.forEach(::downloadPostMedia)
     }
@@ -245,10 +244,13 @@ class HomeViewModel @Inject constructor(
             val key = post.key()
             homeRepository.cachePostMedia(post)
                 .onSuccess {
+                    val cachedMedia = homeRepository.loadCachedMedia(listOf(post))[key]
+                        ?: List(post.mediaItems.size) { null }
                     _uiState.value = _uiState.value.copy(
                         loadingMediaPostKeys = _uiState.value.loadingMediaPostKeys - key,
                         failedMediaPostKeys = _uiState.value.failedMediaPostKeys - key,
-                        mediaCacheRevision = _uiState.value.mediaCacheRevision + 1
+                        cachedMediaByPostKey = _uiState.value.cachedMediaByPostKey +
+                            (key to cachedMedia)
                     )
                 }
                 .onFailure {
