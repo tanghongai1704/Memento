@@ -1,6 +1,8 @@
 package com.tangai.memento
 
 import android.app.Application
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
@@ -12,11 +14,19 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 import java.io.File
 import okio.Path.Companion.toOkioPath
 
 @HiltAndroidApp
-class MementoApplication : Application(), SingletonImageLoader.Factory {
+class MementoApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
+    @Inject lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
+
     override fun newImageLoader(context: android.content.Context): ImageLoader =
         ImageLoader.Builder(context)
             .memoryCache {

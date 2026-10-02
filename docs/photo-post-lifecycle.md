@@ -15,6 +15,8 @@ Lần lượt đọc ảnh → sửa EXIF → resize → nén mỗi JPEG ≤ 5 M
         ↓
 Lưu file private + metadata vào Room
         ↓
+Đưa job vào WorkManager queue, chờ có mạng
+        ↓
 Lần lượt upload các file lên Firebase Storage
         ↓
 Callable finalizePhotoPost xác minh file
@@ -110,7 +112,7 @@ ViewModel:
 
 Entry point là `CreatePostViewModel.confirmAndUploadSelectedMedia()`.
 
-Hàm thêm media/caption/recipient vào `PostUploadQueue` và điều hướng về Home ngay. Queue cấp ứng dụng tiếp tục prepare và upload dù user chuyển giữa Home, Connections, Profile hoặc mở màn hình tạo bài khác. Nhiều bài được upload tuần tự theo thứ tự đã thêm.
+Hàm thêm media/caption/recipient vào `PostUploadQueue` và điều hướng về Home ngay. Queue cấp ứng dụng tiếp tục prepare dù user chuyển giữa Home, Connections, Profile hoặc mở màn hình tạo bài khác. Sau khi draft local hoàn chỉnh, app giao upload cho WorkManager; job vẫn được hệ điều hành giữ khi app rời foreground hoặc process bị dừng. Nhiều bài được nối vào một unique work chain theo thứ tự đã thêm.
 
 `PostUploadStatusBar` nằm phía trên nội dung chính, có thể mở rộng để xem từng bài, tiến độ, bài đang chờ và thao tác Retry/Retry all/Remove.
 
@@ -195,7 +197,9 @@ connections/{connectionId}/posts/{postId}/{mediaId}.jpg
 
 ## 7. Upload lên Firebase Storage
 
-Entry point: `PostRepositoryImpl.uploadPendingPhoto()`.
+`WorkManagerPostUploadScheduler` tạo `PostUploadWorker` với constraint `NetworkType.CONNECTED`. Mỗi post có tag riêng để app mở lại có thể gắn vào job đang tồn tại thay vì chạy upload cạnh tranh. Tất cả job nằm trong unique chain `post-upload-queue` dùng `APPEND_OR_REPLACE`, nên chỉ chạy tuần tự.
+
+Worker khôi phục đúng draft bằng `connectionId/postId`, sau đó gọi `PostRepositoryImpl.uploadPendingPhoto()`.
 
 Trước khi upload, repository kiểm tra:
 
@@ -209,11 +213,13 @@ Upload tuần tự theo `position`, dùng đúng Storage path đã tạo khi pre
 - `contentType = image/jpeg`;
 - custom metadata `authorId = uid`.
 
-`awaitUpload()` chuyển progress của từng file thành progress tổng từ 0 đến 1 để ViewModel hiển thị. Mỗi file có timeout riêng; nếu coroutine bị cancel, upload task đang chạy cũng bị cancel.
+`awaitUpload()` chuyển progress của từng file thành progress tổng từ 0 đến 1; worker ghi progress vào WorkManager để thanh trạng thái hiển thị. Mỗi file có timeout riêng; nếu coroutine bị cancel, upload task đang chạy cũng bị cancel. Lỗi tạm thời được WorkManager retry với exponential backoff; sau giới hạn tự động, draft vẫn ở trạng thái FAILED để user retry thủ công.
 
 Điểm đọc code:
 
 - `PostRepositoryImpl.kt` — `uploadPendingPhoto`, `awaitUpload`
+- `PostUploadWorker.kt` — chạy upload bền vững và retry
+- `WorkManagerPostUploadScheduler.kt` — constraint, unique chain và progress
 - `storage.rules` — quyền tạo/đọc/xóa Storage object
 
 ## 8. Finalize post trên backend
@@ -297,7 +303,7 @@ Account đổi giữa lúc upload
 → repository chặn cập nhật Room bằng kiểm tra lại UID.
 ```
 
-Mọi exception trong khối upload/finalize đều gọi `updateSyncState(..., FAILED)` rồi trả lỗi cho ViewModel.
+Mọi exception trong khối upload/finalize đều cập nhật local sync state. Worker quyết định retry tự động hoặc trả trạng thái lỗi về queue UI.
 
 Đọc tại:
 
@@ -306,7 +312,7 @@ Mọi exception trong khối upload/finalize đều gọi `updateSyncState(..., 
 
 ## 10. Khôi phục retry sau khi mở lại app
 
-`UploadQueueViewModel` khởi động `PostUploadQueue`, sau đó app gọi `getPendingPhotos()`.
+WorkManager tự giữ các job đã schedule qua lúc process bị dừng. Khi UI mở lại, `UploadQueueViewModel` khởi động `PostUploadQueue`, app gọi `getPendingPhotos()` rồi gắn từng draft vào job WorkManager đang tồn tại; draft chưa có job sẽ được schedule lại.
 
 Repository lấy các post của UID có `localSyncStatus IN ('PENDING', 'FAILED')`, cũ nhất trước để giữ đúng thứ tự queue. Với từng record:
 
@@ -316,13 +322,14 @@ Repository lấy các post của UID có `localSyncStatus IN ('PENDING', 'FAILED
 4. Nếu hợp lệ, trả `PendingPhotoPost` vào danh sách queue với trạng thái cần retry.
 5. Nếu không hợp lệ, xóa draft Room và cả thư mục file hỏng rồi xét draft tiếp theo.
 
-Thanh upload hiển thị lại toàn bộ bài hợp lệ. User có thể retry từng bài, retry tất cả hoặc xóa bài khỏi thiết bị. Retry dùng lại `postId`, media metadata và file đã xử lý, không nén lại ảnh.
+Thanh upload hiển thị lại toàn bộ bài hợp lệ. Khi có mạng, job đang chờ tự chạy; sau khi hết số lần retry tự động, user vẫn có thể retry từng bài, retry tất cả hoặc xóa bài khỏi thiết bị. Retry dùng lại `postId`, media metadata và file đã xử lý, không nén lại ảnh.
 
 Đọc tại:
 
 - `PostDao.kt` — `getRetryablePosts`
 - `PostRepositoryImpl.kt` — `getPendingPhotos`
 - `PostUploadQueue.kt` — `start`, `retry`, `discard`
+- `WorkManagerPostUploadScheduler.kt` — nối lại job theo tag
 
 ## 11. Discard draft
 

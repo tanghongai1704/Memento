@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 enum class PostUploadStatus {
     PREPARING,
     QUEUED,
+    SCHEDULED,
     UPLOADING,
     FAILED
 }
@@ -34,7 +35,8 @@ data class PostUploadItem(
 
 @Singleton
 class PostUploadQueue @Inject constructor(
-    private val postRepository: PostRepository
+    private val postRepository: PostRepository,
+    private val uploadScheduler: PostUploadScheduler
 ) {
     private data class QueueEntry(
         val item: PostUploadItem,
@@ -48,10 +50,46 @@ class PostUploadQueue @Inject constructor(
     private val entries = mutableListOf<QueueEntry>()
     private val _items = MutableStateFlow<List<PostUploadItem>>(emptyList())
     private var started = false
-    private var draining = false
     private var restoreJob: Job? = null
 
     val items: StateFlow<List<PostUploadItem>> = _items.asStateFlow()
+
+    init {
+        scope.launch {
+            uploadScheduler.updates.collect { updates ->
+                updates.forEach { (postId, scheduledUpdate) ->
+                    when (scheduledUpdate.status) {
+                        ScheduledUploadStatus.ENQUEUED -> update(postId) { current ->
+                            current.copy(item = current.item.copy(
+                                status = PostUploadStatus.SCHEDULED,
+                                progress = scheduledUpdate.progress,
+                                errorMessage = null
+                            ))
+                        }
+                        ScheduledUploadStatus.RUNNING -> update(postId) { current ->
+                            current.copy(item = current.item.copy(
+                                status = PostUploadStatus.UPLOADING,
+                                progress = scheduledUpdate.progress,
+                                errorMessage = null
+                            ))
+                        }
+                        ScheduledUploadStatus.SUCCEEDED -> {
+                            entries.removeAll { it.item.id == postId }
+                            publish()
+                        }
+                        ScheduledUploadStatus.FAILED -> update(postId) { current ->
+                            current.copy(item = current.item.copy(
+                                status = PostUploadStatus.FAILED,
+                                progress = scheduledUpdate.progress,
+                                errorMessage = scheduledUpdate.errorMessage
+                                    ?: "Couldn’t post. Tap Retry to try again."
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     fun start() {
         if (started) return
@@ -68,8 +106,7 @@ class PostUploadQueue @Inject constructor(
                                     id = pending.post.id,
                                     caption = pending.post.caption,
                                     previewUri = pending.localUris.firstOrNull(),
-                                    status = PostUploadStatus.FAILED,
-                                    errorMessage = "This moment is saved on this device. Tap Retry to post it."
+                                    status = PostUploadStatus.QUEUED
                                 ),
                                 connectionId = pending.post.connectionId,
                                 pending = pending
@@ -78,6 +115,7 @@ class PostUploadQueue @Inject constructor(
                     }
                     entries.addAll(0, restored)
                     publish()
+                    scheduleReady()
                 }
         }
     }
@@ -125,7 +163,7 @@ class PostUploadQueue @Inject constructor(
                     errorMessage = null
                 ))
             }
-            drain()
+            scheduleReady()
         }
     }
 
@@ -143,7 +181,7 @@ class PostUploadQueue @Inject constructor(
             if (removed) {
                 entries.removeAll { it.item.id == id }
                 publish()
-                drain()
+                scheduleReady()
             }
         }
     }
@@ -175,7 +213,7 @@ class PostUploadQueue @Inject constructor(
                         pending = pending
                     )
                 }
-                drain()
+                scheduleReady()
             }.onFailure { error ->
                 update(id) { current ->
                     current.copy(item = current.item.copy(
@@ -184,52 +222,29 @@ class PostUploadQueue @Inject constructor(
                         errorMessage = error.message ?: "We couldn’t prepare this moment. Tap Retry."
                     ))
                 }
+                scheduleReady()
             }
         }
     }
 
-    private fun drain() {
-        if (draining) return
-        draining = true
-        scope.launch {
-            try {
-                while (true) {
-                    val next = entries.firstOrNull {
-                        it.item.status == PostUploadStatus.PREPARING ||
-                            it.item.status == PostUploadStatus.QUEUED ||
-                            it.item.status == PostUploadStatus.UPLOADING
-                    }
-                    if (next == null || next.item.status == PostUploadStatus.PREPARING) break
-                    if (next.item.status != PostUploadStatus.QUEUED || next.pending == null) break
-
-                    val id = next.item.id
-                    update(id) { current ->
+    private fun scheduleReady() {
+        entries.forEach { entry ->
+            when (entry.item.status) {
+                PostUploadStatus.PREPARING -> return
+                PostUploadStatus.QUEUED -> {
+                    val pending = entry.pending ?: return
+                    uploadScheduler.enqueue(pending.post.connectionId, pending.post.id)
+                    update(entry.item.id) { current ->
                         current.copy(item = current.item.copy(
-                            status = PostUploadStatus.UPLOADING,
-                            progress = 0f
+                            status = PostUploadStatus.SCHEDULED,
+                            progress = 0f,
+                            errorMessage = null
                         ))
                     }
-                    val result = postRepository.uploadPendingPhoto(next.pending) { progress ->
-                        scope.launch {
-                            update(id) { current -> current.copy(item = current.item.copy(progress = progress)) }
-                        }
-                    }
-                    if (result.isSuccess) {
-                        entries.removeAll { it.item.id == id }
-                        publish()
-                    } else {
-                        update(id) { current ->
-                            current.copy(item = current.item.copy(
-                                status = PostUploadStatus.FAILED,
-                                errorMessage = result.exceptionOrNull()?.message
-                                    ?: "Couldn’t post. Check your connection and tap Retry."
-                            ))
-                        }
-                        break
-                    }
                 }
-            } finally {
-                draining = false
+                PostUploadStatus.SCHEDULED,
+                PostUploadStatus.UPLOADING,
+                PostUploadStatus.FAILED -> Unit
             }
         }
     }

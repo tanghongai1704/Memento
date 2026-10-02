@@ -206,27 +206,22 @@ class PostRepositoryImpl @Inject constructor(
         withContext(ioDispatcher) { runSuspendCatching {
             val uid = auth.currentUser?.uid ?: return@runSuspendCatching emptyList()
             database.postDao().getRetryablePosts(uid).mapNotNull { entity ->
-                val media = database.postDao().getMedia(entity.connectionId, entity.id)
-                    .sortedBy { it.position }
-                val files = media.map {
-                    photoProcessor.outputFile(entity.connectionId, entity.id, it.mediaId)
-                }
-                if (media.isEmpty() || media.size > MAX_PHOTOS_PER_POST ||
-                    files.zip(media).any { (file, item) ->
-                        !file.exists() || file.length() != item.sizeBytes
-                    }) {
-                    database.postDao().deleteLocalDraft(entity.connectionId, entity.id)
-                    photoProcessor.outputFile(entity.connectionId, entity.id, "placeholder")
-                        .parentFile?.deleteRecursively()
-                    null
-                } else {
-                    PendingPhotoPost(
-                        entity.toDomain(media.map { it.toDomain() }),
-                        files.map { it.toUri().toString() }
-                    )
-                }
+                loadPendingPhoto(entity)
             }
         } }
+
+    override suspend fun getPendingPhoto(
+        connectionId: String,
+        postId: String
+    ): Result<PendingPhotoPost?> = withContext(ioDispatcher) { runSuspendCatching {
+        val uid = auth.currentUser?.uid ?: error("Please sign in and try again.")
+        val entity = database.postDao().getPost(connectionId, postId)
+            ?: return@runSuspendCatching null
+        if (entity.authorId != uid || entity.localSyncStatus == LocalSyncStatus.SYNCED) {
+            return@runSuspendCatching null
+        }
+        loadPendingPhoto(entity)
+    } }
 
     override suspend fun discardPendingPhoto(pending: PendingPhotoPost): Result<Unit> =
         withContext(ioDispatcher) { runSuspendCatching {
@@ -243,6 +238,28 @@ class PostRepositoryImpl @Inject constructor(
 
     private fun storagePath(connectionId: String, postId: String, mediaId: String) =
         "connections/$connectionId/posts/$postId/$mediaId.jpg"
+
+    private suspend fun loadPendingPhoto(entity: PostEntity): PendingPhotoPost? {
+        val media = database.postDao().getMedia(entity.connectionId, entity.id)
+            .sortedBy { it.position }
+        val files = media.map {
+            photoProcessor.outputFile(entity.connectionId, entity.id, it.mediaId)
+        }
+        if (media.isEmpty() || media.size > MAX_PHOTOS_PER_POST ||
+            files.zip(media).any { (file, item) ->
+                !file.exists() || file.length() != item.sizeBytes
+            }
+        ) {
+            database.postDao().deleteLocalDraft(entity.connectionId, entity.id)
+            photoProcessor.outputFile(entity.connectionId, entity.id, "placeholder")
+                .parentFile?.deleteRecursively()
+            return null
+        }
+        return PendingPhotoPost(
+            entity.toDomain(media.map { it.toDomain() }),
+            files.map { it.toUri().toString() }
+        )
+    }
 
     private companion object {
         const val MAX_PHOTOS_PER_POST = 5

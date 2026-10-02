@@ -177,11 +177,12 @@ Khi xác nhận:
 3. Tạo cố định `postId` và một `mediaId` cho mỗi ảnh.
 4. `PhotoProcessor.process()` lần lượt đọc URI, sửa EXIF orientation, scale cạnh tối đa và nén JPEG vào private app storage.
 5. Lưu `PostEntity` trạng thái `PENDING` cùng các `MediaItemEntity` trong Room.
-6. Draft này sống qua lúc app bị đóng; lần mở sau `getPendingPhotos()` khôi phục toàn bộ danh sách để retry.
+6. Draft hoàn chỉnh được đưa vào WorkManager unique chain với network constraint; job sống qua lúc app rời foreground/process bị dừng.
+7. Lần mở sau `getPendingPhotos()` khôi phục danh sách và scheduler gắn lại vào job đang tồn tại theo post tag.
 
 ### Upload và finalize remote
 
-1. `uploadPendingPhoto()` upload tuần tự từng file đã xử lý lên `connections/{connectionId}/posts/{postId}/{mediaId}.jpg`, kèm metadata `authorId`.
+1. `PostUploadWorker` chờ có mạng rồi gọi `uploadPendingPhoto()` để upload tuần tự từng file đã xử lý lên `connections/{connectionId}/posts/{postId}/{mediaId}.jpg`, kèm metadata `authorId`.
 2. Storage Rules kiểm tra đường dẫn và membership.
 3. Android gọi Callable `finalizePhotoPost` với cùng ID và metadata.
 4. Backend đọc metadata object thật trong Storage, kiểm tra MIME, size và author.
@@ -193,6 +194,7 @@ Khi xác nhận:
 
 - `CreatePostViewModel.kt` — `confirmAndUploadSelectedMedia`
 - `PostUploadQueue.kt` — thứ tự prepare/upload, retry và discard
+- `PostUploadWorker.kt`, `WorkManagerPostUploadScheduler.kt` — persistent work, network constraint và progress
 - `PostRepositoryImpl.kt` — `preparePhotoPost`, `uploadPendingPhoto`, `getPendingPhotos`, `discardPendingPhoto`
 - `PhotoProcessor.kt` — `process`
 - `core/database/.../dao/PostDao.kt`

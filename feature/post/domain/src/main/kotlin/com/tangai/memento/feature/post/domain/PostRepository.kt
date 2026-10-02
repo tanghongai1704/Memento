@@ -20,5 +20,7 @@ interface PostRepository {
 
     suspend fun getPendingPhotos(): Result<List<PendingPhotoPost>>
 
+    suspend fun getPendingPhoto(connectionId: String, postId: String): Result<PendingPhotoPost?>
+
     suspend fun discardPendingPhoto(pending: PendingPhotoPost): Result<Unit>
 }

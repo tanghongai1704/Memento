@@ -144,6 +144,7 @@ private fun UploadQueueRow(
 private fun statusLabel(item: PostUploadItem): String = when (item.status) {
     PostUploadStatus.PREPARING -> "Preparing… ${(item.progress * 100).toInt()}%"
     PostUploadStatus.QUEUED -> "Waiting in queue"
+    PostUploadStatus.SCHEDULED -> "Waiting for a connection"
     PostUploadStatus.UPLOADING -> "Uploading… ${(item.progress * 100).toInt()}%"
     PostUploadStatus.FAILED -> item.errorMessage ?: "Upload failed"
 }
