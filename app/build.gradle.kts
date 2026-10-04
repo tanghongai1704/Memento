@@ -46,8 +46,7 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":core:database"))
     implementation(project(":core:network"))
-    implementation(project(":core:media"))
-    
+
     // Feature modules (only presentation layer)
     implementation(project(":feature:auth:presentation"))
     implementation(project(":feature:auth:data"))

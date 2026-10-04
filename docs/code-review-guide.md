@@ -293,4 +293,4 @@ Khi review một flow, lần theo đủ các câu hỏi sau:
 
 Đã có trong code: email/password auth, profile, invite code cố định, DIRECT connection, realtime connection/profile, disconnect, post PHOTO 1–5 ảnh với bốn layout, draft/retry, upload/finalize idempotent, realtime post sync, pagination, download cache, soft delete và scheduled cleanup.
 
-Chưa hoàn thiện hoặc chưa có: GROUP connection/invite, VIDEO, bộ lọc Home nâng cao, avatar upload và các trải nghiệm production sâu hơn như retry nền bằng WorkManager.
+Chưa hoàn thiện hoặc chưa có: GROUP connection/invite, VIDEO, bộ lọc Home nâng cao, avatar upload và các trải nghiệm production sâu hơn như telemetry/quan sát upload nền. Retry nền cơ bản đã chạy bằng WorkManager.

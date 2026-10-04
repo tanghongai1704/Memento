@@ -6,20 +6,20 @@
 
 - Email/password Auth; profile theo Firebase Auth UID; xem/sửa display name, username và bio; gửi email reset password.
 - Mỗi tài khoản có một mã kết nối cố định 8 ký tự. Callable Functions tạo connection DIRECT và hai membership bằng transaction, đồng thời dùng khóa theo cặp UID để không tạo connection trùng.
-- Connection và post được đồng bộ từ Firestore vào Room. Home đọc Room, hỗ trợ All/từng connection, realtime feed và phân trang 20 bài cho mỗi connection.
+- Connection và post được đồng bộ từ Firestore vào Room. Home đọc Room, hỗ trợ All/từng connection, realtime feed và phân trang 20 bài theo phạm vi feed đang chọn.
 - Mỗi post hỗ trợ 1–5 ảnh JPEG với layout SINGLE, GRID, COLLAGE hoặc CAROUSEL. Ảnh được sửa EXIF, resize, nén, upload tuần tự và finalize qua backend.
-- Draft PENDING/FAILED được giữ để retry cùng ID sau khi app bị đóng. Ảnh phía nhận được tải vào cache riêng của app để xem lại offline.
+- Draft PENDING/FAILED được giữ để retry cùng ID sau khi app bị đóng. WorkManager chờ mạng và tiếp tục upload nền; ảnh phía nhận được tải vào cache riêng của app để xem lại offline.
 - Tác giả có thể soft-delete post; một trong hai thành viên có thể disconnect. Scheduled cleanup dọn orphan và media của post đã xóa sau grace period.
-- Chưa triển khai GROUP, VIDEO, avatar upload, bộ lọc Home nâng cao hoặc retry nền bằng WorkManager.
+- Chưa triển khai GROUP, VIDEO, avatar upload hoặc bộ lọc Home nâng cao.
 
 ## Chạy và kiểm tra
 
-Mở bằng Android Studio với Android SDK 37. Gradle daemon dùng JDK 25 theo `gradle/gradle-daemon-jvm.properties`; Java source compatibility là 11. Cần cấu hình Firebase của dự án và bật Email/Password.
+Mở bằng Android Studio với Android SDK 37. Gradle daemon dùng JDK 25 theo `gradle/gradle-daemon-jvm.properties`; Java source compatibility là 11. Cloud Functions dùng Node.js 22 (`functions/.nvmrc`). Cần cấu hình Firebase của dự án và bật Email/Password.
 
 ```sh
 ./gradlew :app:assembleDebug
 python3 tools/check_schema.py
-./gradlew testDebugUnitTest
+./gradlew test testDebugUnitTest lintDebug
 cd functions && npm test && npm run test:emulator && cd ..
 cd functions && npm run test:storage-rules && cd ..
 firebase emulators:exec --only auth,firestore --project demo-memento-schema \

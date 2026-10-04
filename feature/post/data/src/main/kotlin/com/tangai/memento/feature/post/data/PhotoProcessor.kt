@@ -4,9 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.media.ExifInterface
 import android.net.Uri
+import androidx.core.graphics.scale
 import androidx.core.net.toUri
+import androidx.exifinterface.media.ExifInterface
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
@@ -99,11 +100,9 @@ class PhotoProcessor @Inject constructor(@ApplicationContext private val context
         val longest = max(source.width, source.height)
         if (longest <= maxEdge) return source
         val scale = maxEdge.toFloat() / longest
-        return Bitmap.createScaledBitmap(
-            source,
+        return source.scale(
             (source.width * scale).toInt().coerceAtLeast(1),
             (source.height * scale).toInt().coerceAtLeast(1),
-            true
         )
     }
 

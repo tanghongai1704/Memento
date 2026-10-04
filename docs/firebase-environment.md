@@ -39,6 +39,8 @@ Các file trong `.local/firebase-audit/` chỉ là audit/backup local, không ph
 
 ## Kiểm tra local
 
+Cloud Functions yêu cầu Node.js 22. Nếu dùng `nvm`, chạy `nvm use` trong thư mục `functions` để đọc phiên bản từ `.nvmrc` trước khi cài dependency hoặc chạy emulator.
+
 ```sh
 firebase emulators:exec --only auth,firestore --project demo-memento-schema \
   'python3 tools/check_firestore_rules.py && python3 tools/check_auth_profile.py'
@@ -48,7 +50,9 @@ npm run test:emulator
 npm run test:storage-rules
 ```
 
-Các test này xác minh Auth/Profile, Functions, Firestore/Storage Rules và schema trong emulator; vẫn cần build/test Android riêng.
+Các test này xác minh Auth/Profile, Functions và Firestore/Storage Rules trong emulator. Ở root project, chạy thêm `./gradlew test testDebugUnitTest lintDebug :app:assembleDebug` và `python3 tools/check_schema.py`.
+
+App loại toàn bộ database, shared preferences và file riêng tư khỏi cloud backup lẫn device transfer. Firebase session và cache phải được tạo lại trên thiết bị mới thay vì sao chép ngầm.
 
 ## Deploy có chủ đích
 

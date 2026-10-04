@@ -68,6 +68,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.core.net.toUri
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -116,7 +117,7 @@ fun MediaPickerScreen(
 
     val pickerContract = remember {
         PreselectedPhotoPickerContract {
-            selectedMediaState.value.map { media -> Uri.parse(media.uri) }
+            selectedMediaState.value.map { media -> media.uri.toUri() }
         }
     }
     val photoLauncher = rememberLauncherForActivityResult(contract = pickerContract) { uris ->

@@ -18,7 +18,7 @@ Tài liệu này là snapshot hiện trạng, không phải nhật ký theo đ�
 - VIDEO upload/transcode/playback.
 - Avatar upload.
 - Bộ lọc Home nâng cao theo chiều gửi/nhận, loại post và khoảng thời gian dù DAO đã có nền tảng.
-- Retry nền tự động; hiện người dùng chủ động retry hoặc discard draft.
+- Theo dõi trạng thái upload sâu hơn ở mức hệ thống và chính sách retry dài hạn; hiện WorkManager đã chờ mạng, retry nền theo backoff, sau đó cho phép user retry hoặc discard.
 - Hard-delete metadata Firestore và cơ chế thu hồi bản sao đã được lưu ngoài app.
 
 ## Invariant cần giữ

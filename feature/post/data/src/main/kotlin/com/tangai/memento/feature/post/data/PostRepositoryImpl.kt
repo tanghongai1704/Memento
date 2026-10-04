@@ -128,7 +128,7 @@ class PostRepositoryImpl @Inject constructor(
             "A photo post contains an invalid number of media items."
         }
         val localFiles = withContext(ioDispatcher) {
-            pending.localUris.map { File(requireNotNull(Uri.parse(it).path)) }.also { files ->
+            pending.localUris.map { File(requireNotNull(it.toUri().path)) }.also { files ->
                 check(files.zip(media).all { (file, item) ->
                     file.exists() && file.length() == item.sizeBytes
                 }) {

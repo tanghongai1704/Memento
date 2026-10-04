@@ -16,5 +16,5 @@ kotlin {
 dependencies {
     implementation(project(":core:domain"))
     implementation(libs.javax.inject)
-    implementation(libs.junit)
+    testImplementation(libs.junit)
 }

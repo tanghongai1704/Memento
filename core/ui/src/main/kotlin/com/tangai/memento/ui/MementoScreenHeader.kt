@@ -14,8 +14,8 @@ import androidx.compose.ui.text.style.TextAlign
 @Composable
 fun MementoScreenHeader(
     title: String,
-    subtitle: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    subtitle: String? = null
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),

@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.edit
 import dagger.hilt.android.AndroidEntryPoint
 import com.tangai.memento.navigation.MementoNavGraph
 
@@ -34,7 +35,7 @@ class MainActivity : ComponentActivity() {
                 darkTheme = darkTheme,
                 onDarkThemeChanged = { enabled ->
                     darkTheme = enabled
-                    preferences.edit().putBoolean("dark_theme", enabled).apply()
+                    preferences.edit { putBoolean("dark_theme", enabled) }
                 }
             )
         }

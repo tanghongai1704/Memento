@@ -1,6 +1,6 @@
 # Kiến trúc và luồng dữ liệu
 
-`app` quản lý navigation và binding Hilt. Mỗi feature tách `presentation`, `domain`, `data`; `core/domain` chứa model dùng chung, `core/database` chứa Room v3, `core/network` cung cấp Firebase/network status, `core/media` xử lý media dùng chung, `core/ui` và `core/designsystem` phục vụ Compose.
+`app` quản lý navigation, WorkManager và binding Hilt. Mỗi feature tách `presentation`, `domain`, `data`; `core/domain` chứa model dùng chung, `core/database` chứa Room v3, `core/network` cung cấp Firebase/network status, còn `core/ui` và `core/designsystem` phục vụ Compose. Xử lý ảnh hiện thuộc `feature/post/data` vì chỉ flow tạo post sử dụng.
 
 Repository và data source phải main-safe. Room suspend API và Firebase async API được gọi trực tiếp; các thao tác blocking với `File`, `ContentResolver` và xử lý bitmap chạy bằng IO dispatcher được inject từ `core/network`. Presentation chỉ nhận URI/path media đã được data layer xác nhận, không tự dựng đường dẫn hoặc kiểm tra file.
 
@@ -46,6 +46,6 @@ Tác giả gọi `softDeletePost`; backend đánh dấu DELETED thay vì xóa do
 
 ## Giới hạn
 
-GROUP và VIDEO có enum/schema dự phòng nhưng chưa có flow sản phẩm. Chưa có avatar upload, bộ lọc Home nâng cao hoặc retry upload nền bằng WorkManager. Room chỉ có migration đã kiểm chứng từ v2 lên v3; không dùng destructive fallback cho database cũ không được hỗ trợ.
+GROUP và VIDEO có enum/schema dự phòng nhưng chưa có flow sản phẩm. Chưa có avatar upload hoặc bộ lọc Home nâng cao. Upload nền đã dùng WorkManager với network constraint và exponential backoff; sau khi hết retry tự động, user vẫn có thể retry hoặc discard thủ công. Room chỉ có migration đã kiểm chứng từ v2 lên v3; không dùng destructive fallback cho database cũ không được hỗ trợ.
 
 Chi tiết trường dữ liệu ở [data-schema](data-schema.md), lifecycle ảnh ở [photo-post-lifecycle](photo-post-lifecycle.md), và bản đồ code ở [code-review-guide](code-review-guide.md).

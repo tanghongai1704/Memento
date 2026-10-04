@@ -25,6 +25,7 @@ dependencies {
     implementation(project(":core:network"))
     implementation(project(":feature:post:domain"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.javax.inject)
     implementation(libs.androidx.room.ktx)
