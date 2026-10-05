@@ -35,6 +35,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -45,8 +46,7 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":core:database"))
     implementation(project(":core:network"))
-    implementation(project(":core:media"))
-    
+
     // Feature modules (only presentation layer)
     implementation(project(":feature:auth:presentation"))
     implementation(project(":feature:auth:data"))
@@ -60,9 +60,6 @@ dependencies {
     implementation(project(":feature:post:presentation"))
     implementation(project(":feature:post:data"))
     implementation(project(":feature:post:domain"))
-    implementation(project(":feature:history:presentation"))
-    implementation(project(":feature:history:data"))
-    implementation(project(":feature:history:domain"))
     
     // Compose and UI
     implementation(platform(libs.androidx.compose.bom))
@@ -77,15 +74,25 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.coil.compose)
     
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
+    implementation(libs.firebase.functions)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
     
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.work)
+    implementation(libs.androidx.work.runtime)
+    ksp(libs.androidx.hilt.compiler)
     
     // Testing
     testImplementation(libs.junit)

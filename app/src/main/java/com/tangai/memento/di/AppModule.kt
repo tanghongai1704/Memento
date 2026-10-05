@@ -2,14 +2,12 @@ package com.tangai.memento.di
 
 import com.tangai.memento.feature.auth.data.AuthRepositoryImpl
 import com.tangai.memento.feature.auth.domain.AuthRepository
-import com.tangai.memento.feature.connection.data.FakeConnectionRepository
-import com.tangai.memento.feature.connection.domain.ConnectionRepository
-import com.tangai.memento.feature.history.data.FakeHistoryRepository
-import com.tangai.memento.feature.history.domain.HistoryRepository
-import com.tangai.memento.feature.home.data.FakeHomeRepository
+import com.tangai.memento.feature.home.data.HomeRepositoryImpl
 import com.tangai.memento.feature.home.domain.HomeRepository
-import com.tangai.memento.feature.post.data.FakePostRepository
+import com.tangai.memento.feature.post.data.PostRepositoryImpl
 import com.tangai.memento.feature.post.domain.PostRepository
+import com.tangai.memento.background.WorkManagerPostUploadScheduler
+import com.tangai.memento.feature.post.presentation.upload.PostUploadScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -25,21 +23,16 @@ abstract class AppModule {
 
     @Binds
     abstract fun bindHomeRepository(
-        impl: FakeHomeRepository
+        impl: HomeRepositoryImpl
     ): HomeRepository
 
     @Binds
-    abstract fun bindConnectionRepository(
-        impl: FakeConnectionRepository
-    ): ConnectionRepository
-
-    @Binds
     abstract fun bindPostRepository(
-        impl: FakePostRepository
+        impl: PostRepositoryImpl
     ): PostRepository
 
     @Binds
-    abstract fun bindHistoryRepository(
-        impl: FakeHistoryRepository
-    ): HistoryRepository
+    abstract fun bindPostUploadScheduler(
+        impl: WorkManagerPostUploadScheduler
+    ): PostUploadScheduler
 }

@@ -25,10 +25,14 @@ android {
 }
 
 dependencies {
+    implementation(libs.coil.compose)
     implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:ui"))
     implementation(project(":feature:home:domain"))
+    implementation(project(":feature:auth:domain"))
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
     
     implementation(libs.androidx.core.ktx)
     implementation(platform(libs.androidx.compose.bom))

@@ -15,5 +15,6 @@ kotlin {
 
 dependencies {
     implementation(project(":core:domain"))
-    implementation(libs.junit)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    testImplementation(libs.junit)
 }

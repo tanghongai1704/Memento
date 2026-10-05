@@ -1,44 +1,40 @@
 # Memento
 
-Memento là ứng dụng Android chia sẻ media **1-1** giữa hai người dùng, xây theo hướng multi-module và Clean Architecture.
+Ứng dụng Android chia sẻ khoảnh khắc riêng tư trong connection DIRECT, xây dựng bằng Kotlin, Jetpack Compose, Hilt, Room và Firebase.
 
-## Hiện trạng dự án
+## Trạng thái hiện tại
 
-- Có các flow chính: **Auth, Home, Connection, Create Post, History**
-- UI dùng **Jetpack Compose**
-- Kiến trúc theo layer: **presentation → domain → data**
-- Data hiện tại đang dùng **Fake Repository** để hoàn thiện luồng MVP
+- Email/password Auth; profile theo Firebase Auth UID; xem/sửa display name, username và bio; gửi email reset password.
+- Mỗi tài khoản có một mã kết nối cố định 8 ký tự. Callable Functions tạo connection DIRECT và hai membership bằng transaction, đồng thời dùng khóa theo cặp UID để không tạo connection trùng.
+- Connection và post được đồng bộ từ Firestore vào Room. Home đọc Room, hỗ trợ All/từng connection, realtime feed và phân trang 20 bài theo phạm vi feed đang chọn.
+- Mỗi post hỗ trợ 1–5 ảnh JPEG với layout SINGLE, GRID, COLLAGE hoặc CAROUSEL. Ảnh được sửa EXIF, resize, nén, upload tuần tự và finalize qua backend.
+- Draft PENDING/FAILED được giữ để retry cùng ID sau khi app bị đóng. WorkManager chờ mạng và tiếp tục upload nền; ảnh phía nhận được tải vào cache riêng của app để xem lại offline.
+- Tác giả có thể soft-delete post; một trong hai thành viên có thể disconnect. Scheduled cleanup dọn orphan và media của post đã xóa sau grace period.
+- Chưa triển khai GROUP, VIDEO, avatar upload hoặc bộ lọc Home nâng cao.
 
-## Công nghệ chính
+## Chạy và kiểm tra
 
-- Kotlin, Coroutines
-- Jetpack Compose, Navigation Compose, Material 3
-- Hilt (DI)
-- Room (module nền tảng)
-- Firebase SDK (đã cấu hình dependency trong project)
+Mở bằng Android Studio với Android SDK 37. Gradle daemon dùng JDK 25 theo `gradle/gradle-daemon-jvm.properties`; Java source compatibility là 11. Cloud Functions dùng Node.js 22 (`functions/.nvmrc`). Cần cấu hình Firebase của dự án và bật Email/Password.
 
-## Cấu trúc module
-
-```text
-app
-core/
-  common, domain, ui, designsystem, database, network, media
-feature/
-  auth/{domain,data,presentation}
-  home/{domain,data,presentation}
-  connection/{domain,data,presentation}
-  post/{domain,data,presentation}
-  history/{domain,data,presentation}
+```sh
+./gradlew :app:assembleDebug
+python3 tools/check_schema.py
+./gradlew test testDebugUnitTest lintDebug
+cd functions && npm test && npm run test:emulator && cd ..
+cd functions && npm run test:storage-rules && cd ..
+firebase emulators:exec --only auth,firestore --project demo-memento-schema \
+  "python3 tools/check_firestore_rules.py && python3 tools/check_auth_profile.py"
 ```
 
-## Chạy dự án
+Các thay đổi trong repository không tự deploy. Xem [môi trường Firebase](docs/firebase-environment.md) trước khi chạy lệnh tác động đến project thật.
 
-1. Mở project bằng Android Studio (JDK 11+).
-2. Sync Gradle.
-3. Chạy module `app` trên emulator hoặc thiết bị thật.
+## Tài liệu
 
-## Ghi chú
-
-- `docs/architecture.md`: mô tả kiến trúc chi tiết.
-- `docs/differentiating-feature.md`: mô tả differentiating feature **Moment Recap**.
-- `docs/register-firebase-auth.md`: mô tả đầy đủ flow Register Email/Password qua Firebase Auth + Firestore + Room.
+- [Trạng thái và phạm vi hiện tại](docs/mvp-progress.md)
+- [Kiến trúc và luồng dữ liệu](docs/architecture.md)
+- [Schema Firestore/Room](docs/data-schema.md)
+- [Lifecycle post ảnh](docs/photo-post-lifecycle.md)
+- [Hướng dẫn đọc và review code](docs/code-review-guide.md)
+- [Firebase Auth và profile](docs/register-firebase-auth.md)
+- [Môi trường Firebase](docs/firebase-environment.md)
+- [Moment Recap — đề xuất](docs/differentiating-feature.md)

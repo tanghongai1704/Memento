@@ -1,0 +1,33 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function activeMember(connectionId) {
+      let connection = firestore.get(
+        /databases/(default)/documents/connections/$(connectionId)
+      );
+      let member = firestore.get(
+        /databases/(default)/documents/connections/$(connectionId)/members/$(request.auth.uid)
+      );
+      return request.auth != null
+        && connection.data.status == 'ACTIVE'
+        && request.auth.uid in connection.data.memberIds
+        && member.data.status == 'ACTIVE';
+    }
+
+    match /connections/{connectionId}/posts/{postId}/{fileName} {
+      allow read: if activeMember(connectionId);
+      allow write: if activeMember(connectionId)
+        && request.resource != null
+        && fileName.matches('.*[.]jpg')
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.metadata.authorId == request.auth.uid
+        && (resource == null || resource.metadata.authorId == request.auth.uid);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

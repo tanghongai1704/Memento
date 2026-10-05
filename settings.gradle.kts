@@ -26,10 +26,8 @@ rootProject.name = "Memento"
 include(":app")
 
 // Core modules
-include(":core:common")
 include(":core:database")
 include(":core:network")
-include(":core:media")
 include(":core:designsystem")
 include(":core:ui")
 include(":core:domain")
@@ -50,7 +48,3 @@ include(":feature:connection:presentation")
 include(":feature:post:domain")
 include(":feature:post:data")
 include(":feature:post:presentation")
-
-include(":feature:history:domain")
-include(":feature:history:data")
-include(":feature:history:presentation")

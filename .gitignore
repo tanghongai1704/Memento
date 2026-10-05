@@ -2,6 +2,8 @@
 .gradle/
 **/build/
 
+.idea/
+
 # Local configuration
 local.properties
 
@@ -13,8 +15,10 @@ local.properties
 .idea/workspace.xml
 .idea/navEditor.xml
 .idea/assetWizardSettings.xml
+.idea/deploymentTargetSelector.xml
 
 # Kotlin/IDE temporary files
+.kotlin/
 *.salive
 
 # macOS
@@ -24,3 +28,19 @@ local.properties
 /captures/
 .externalNativeBuild/
 .cxx/
+
+# Firebase emulator output
+.firebase/
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+
+# Cloud Functions
+functions/node_modules/
+functions/lib/
+functions/.secret.local
+*service-account*.json
+*firebase-adminsdk*.json
+
+# Local Firebase audit reports and snapshots
+.local/

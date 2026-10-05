@@ -1,0 +1,487 @@
+package com.tangai.memento.feature.home.data
+
+import android.content.Context
+import androidx.room.withTransaction
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.storage.FirebaseStorage
+import com.tangai.memento.database.MementoDatabase
+import com.tangai.memento.database.model.MediaItemEntity
+import com.tangai.memento.database.model.PostEntity
+import com.tangai.memento.database.model.toDomain
+import com.tangai.memento.database.model.toEntity
+import com.tangai.memento.domain.model.*
+import com.tangai.memento.feature.home.domain.*
+import com.tangai.memento.network.awaitFirebaseStorageTask
+import com.tangai.memento.network.awaitFirebaseTask
+import com.tangai.memento.network.di.IoDispatcher
+import com.tangai.memento.network.runSuspendCatching
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
+import javax.inject.Inject
+
+class HomeRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val database: MementoDatabase,
+    private val auth: FirebaseAuth,
+    private val firestore: FirebaseFirestore,
+    private val functions: FirebaseFunctions,
+    private val storage: FirebaseStorage,
+    private val connections: com.tangai.memento.feature.connection.domain.ConnectionRepository,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher
+) : HomeRepository {
+    private val postSyncMutex = Mutex()
+    private val paginationLock = Any()
+    private var paginationUid: String? = null
+    private var feedCursor: DocumentSnapshot? = null
+    private var feedHasMore = false
+    private var feedHasOlderPages = false
+    private val connectionCursors = mutableMapOf<String, DocumentSnapshot>()
+    private val connectionHasMore = mutableMapOf<String, Boolean>()
+
+    override suspend fun loadPosts(): Result<List<Post>> = runSuspendCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
+        database.postDao().loadPosts(uid).also { check(auth.currentUser?.uid == uid) }
+    }
+
+    override fun observePosts(): Flow<Result<PostFeedPage>> = callbackFlow {
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            close(IllegalStateException("User is not signed in."))
+            return@callbackFlow
+        }
+
+        synchronized(paginationLock) { resetPagination(uid) }
+
+        fun syncSnapshot(
+            documents: List<DocumentSnapshot>,
+            updateFeedPagination: Boolean
+        ) = launch {
+            try {
+                check(auth.currentUser?.uid == uid) { "Account changed during post sync." }
+                if (updateFeedPagination) synchronized(paginationLock) {
+                    if (paginationUid == uid && !feedHasOlderPages) {
+                        feedCursor = documents.lastOrNull()
+                        feedHasMore = documents.size.toLong() == POST_PAGE_SIZE
+                    }
+                }
+                val cacheError = postSyncMutex.withLock {
+                    val mediaToCache = syncDocumentMetadata(documents)
+                    // Room is the UI source: publish post metadata immediately, then let each
+                    // photo keep its loading state while Storage fills the local cache.
+                    trySend(Result.success(currentPage(uid)))
+                    cacheMediaItems(mediaToCache)
+                }
+                trySend(Result.success(currentPage(uid)))
+                cacheError?.let { trySend(Result.failure(it)) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                trySend(Result.failure(error))
+            }
+        }
+
+        val feedListener = firestore.collectionGroup("posts")
+            .whereArrayContains("memberIds", uid)
+            .whereEqualTo("status", PostStatus.ACTIVE.name)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(POST_PAGE_SIZE)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(Result.failure(error))
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) syncSnapshot(snapshot.documents, true)
+            }
+
+        val deletionListener = firestore.collectionGroup("posts")
+            .whereArrayContains("memberIds", uid)
+            .whereEqualTo("status", PostStatus.DELETED.name)
+            .orderBy("updatedAt", Query.Direction.DESCENDING)
+            .limit(DELETED_POST_PAGE_SIZE)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(Result.failure(error))
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) syncSnapshot(snapshot.documents, false)
+            }
+
+        awaitClose {
+            feedListener.remove()
+            deletionListener.remove()
+            synchronized(paginationLock) {
+                if (paginationUid == uid) resetPagination(null)
+            }
+        }
+    }
+
+    override suspend fun loadOlderPosts(connectionId: String?): Result<PostFeedPage> = runSuspendCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
+        val target = synchronized(paginationLock) {
+            if (paginationUid != uid) resetPagination(uid)
+            if (connectionId == null) {
+                if (feedHasMore) PageTarget(null, feedCursor) else null
+            } else {
+                if (connectionHasMore[connectionId] != false) {
+                    PageTarget(connectionId, connectionCursors[connectionId])
+                } else {
+                    null
+                }
+            }
+        } ?: return@runSuspendCatching currentPage(uid)
+
+        check(auth.currentUser?.uid == uid) { "Account changed while loading older posts." }
+        var query = activePostsQuery(uid, target.connectionId)
+        target.cursor?.let { query = query.startAfter(it) }
+        val documents = query.limit(POST_PAGE_SIZE).get().awaitFirebaseTask().documents
+
+        val cacheError = postSyncMutex.withLock {
+            cacheMediaItems(syncDocumentMetadata(documents))
+        }
+        cacheError?.let { throw it }
+
+        synchronized(paginationLock) {
+            if (paginationUid == uid) {
+                if (target.connectionId == null) {
+                    feedHasOlderPages = true
+                    documents.lastOrNull()?.let { feedCursor = it }
+                    feedHasMore = documents.size.toLong() == POST_PAGE_SIZE
+                } else {
+                    documents.lastOrNull()?.let { connectionCursors[target.connectionId] = it }
+                    connectionHasMore[target.connectionId] =
+                        documents.size.toLong() == POST_PAGE_SIZE
+                }
+            }
+        }
+
+        check(auth.currentUser?.uid == uid) { "Account changed while loading older posts." }
+        currentPage(uid)
+    }
+
+    override suspend fun deletePost(post: Post): Result<Unit> = runSuspendCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
+        check(post.authorId == uid) { "Only the author can delete this post." }
+        val response = functions.getHttpsCallable("softDeletePost")
+            .call(mapOf("connectionId" to post.connectionId, "postId" to post.id))
+            .awaitFirebaseTask().data.asMap()
+        val deletedAt = response.requiredLong("deletedAtMillis")
+        val updatedAt = response.requiredLong("updatedAtMillis")
+        check(auth.currentUser?.uid == uid) { "Account changed while deleting the post." }
+        database.postDao().markDeleted(post.connectionId, post.id, uid, deletedAt, updatedAt)
+        withContext(ioDispatcher) {
+            post.mediaItems.forEach { media ->
+                cachedMediaFile(post.connectionId, post.id, media.mediaId).delete()
+            }
+        }
+    }
+
+    override suspend fun loadUsers(userIds: Set<String>): Result<List<User>> = runSuspendCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
+        val cachedUsers = userIds.mapNotNull { database.userDao().getUserById(it)?.toDomain() }
+            .associateBy(User::id)
+        val remoteUsers = (userIds - cachedUsers.keys).mapNotNull { authorId ->
+            firestore.collection("users").document(authorId).get().awaitFirebaseTask().toUser()
+        }
+        check(auth.currentUser?.uid == uid) { "Account changed while loading authors." }
+        remoteUsers.forEach { database.userDao().upsertUser(it.toEntity()) }
+        (cachedUsers.values + remoteUsers).also {
+            check(auth.currentUser?.uid == uid) { "Account changed while loading authors." }
+        }
+    }
+
+    override suspend fun loadCachedUsers(userIds: Set<String>): Result<List<User>> = runSuspendCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
+        userIds.mapNotNull { database.userDao().getUserById(it)?.toDomain() }
+            .also { check(auth.currentUser?.uid == uid) }
+    }
+
+    private suspend fun storePost(
+        connectionId: String,
+        document: DocumentSnapshot
+    ): List<MediaItemEntity> {
+        val post = document.toPostEntity(connectionId)
+        val media = document.toMediaEntities(connectionId)
+        database.withTransaction {
+            database.postDao().upsertPost(post)
+            database.postDao().upsertMedia(media)
+        }
+        return media
+    }
+
+    private suspend fun syncDocumentMetadata(documents: List<DocumentSnapshot>): List<MediaItemEntity> {
+        val mediaToCache = mutableListOf<MediaItemEntity>()
+        documents.forEach { document ->
+            val connectionId = requireNotNull(document.getString("connectionId")) {
+                "Post ${document.id} is missing connectionId."
+            }
+            val status = PostStatus.valueOf(requireNotNull(document.getString("status")))
+            val media = storePost(connectionId, document)
+            if (status == PostStatus.DELETED) {
+                withContext(ioDispatcher) {
+                    media.forEach { cachedMediaFile(it.connectionId, it.postId, it.mediaId).delete() }
+                }
+            } else {
+                mediaToCache += media
+            }
+        }
+        return mediaToCache
+    }
+
+    private suspend fun cacheMediaItems(mediaItems: List<MediaItemEntity>): Throwable? {
+        var firstCacheError: Throwable? = null
+        mediaItems.forEach { item ->
+            try {
+                cacheMedia(item)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                if (firstCacheError == null) firstCacheError = error
+            }
+        }
+        return firstCacheError
+    }
+
+    private fun activePostsQuery(uid: String, connectionId: String? = null): Query {
+        var query = firestore.collectionGroup("posts")
+            .whereArrayContains("memberIds", uid)
+            .whereEqualTo("status", PostStatus.ACTIVE.name)
+        connectionId?.let { query = query.whereEqualTo("connectionId", it) }
+        return query
+        .orderBy("createdAt", Query.Direction.DESCENDING)
+    }
+
+    private suspend fun currentPage(uid: String): PostFeedPage {
+        val activeConnectionIds = database.connectionMemberDao()
+            .getActiveMembershipsForUser(uid)
+            .mapTo(mutableSetOf()) { it.connectionId }
+        return PostFeedPage(
+            posts = database.postDao().loadPosts(uid),
+            hasMorePosts = synchronized(paginationLock) {
+                paginationUid == uid && feedHasMore
+            },
+            connectionIdsWithMore = synchronized(paginationLock) {
+                if (paginationUid == uid) {
+                    activeConnectionIds.filterTo(mutableSetOf()) {
+                        connectionHasMore[it] != false
+                    }
+                } else {
+                    emptySet()
+                }
+            }
+        )
+    }
+
+    private fun resetPagination(uid: String?) {
+        paginationUid = uid
+        feedCursor = null
+        feedHasMore = false
+        feedHasOlderPages = false
+        connectionCursors.clear()
+        connectionHasMore.clear()
+    }
+
+    private suspend fun cacheMedia(media: MediaItemEntity) = withContext(ioDispatcher) {
+        if (media.mediaType != MediaType.IMAGE) return@withContext
+        val output = cachedMediaFile(media.connectionId, media.postId, media.mediaId)
+        if (output.exists() && output.length() == media.sizeBytes) {
+            output.setLastModified(System.currentTimeMillis())
+            return@withContext
+        }
+
+        output.parentFile?.mkdirs()
+        val partial = File(output.parentFile, "${output.name}.download")
+        if (partial.exists()) partial.delete()
+        try {
+            storage.reference.child(media.storagePath).getFile(partial).awaitFirebaseStorageTask()
+            check(partial.length() == media.sizeBytes) { "Downloaded photo size does not match its post." }
+            if (output.exists()) check(output.delete()) { "Could not replace the cached photo." }
+            check(partial.renameTo(output)) { "Could not move the downloaded photo into cache." }
+            trimOfflineMediaCache(output)
+        } finally {
+            if (partial.exists()) partial.delete()
+        }
+    }
+
+    private suspend fun trimOfflineMediaCache(currentFile: File) {
+        val root = File(context.filesDir, "pending_media")
+        val files = root.walkTopDown()
+            .filter { it.isFile && !it.name.endsWith(".download") }
+            .toList()
+        var totalBytes = files.sumOf(File::length)
+        if (totalBytes <= OFFLINE_MEDIA_CACHE_BYTES) return
+
+        val uid = auth.currentUser?.uid
+        val protectedPaths = if (uid == null) {
+            emptySet()
+        } else {
+            database.postDao().getRetryablePosts(uid).flatMap { post ->
+                database.postDao().getMedia(post.connectionId, post.id).map { media ->
+                    cachedMediaFile(post.connectionId, post.id, media.mediaId).absolutePath
+                }
+            }.toSet()
+        }
+        files.asSequence()
+            .filter { it.absolutePath != currentFile.absolutePath && it.absolutePath !in protectedPaths }
+            .sortedBy(File::lastModified)
+            .forEach { file ->
+                if (totalBytes <= OFFLINE_MEDIA_CACHE_BYTES) return
+                val size = file.length()
+                if (file.delete()) totalBytes -= size
+            }
+    }
+    override suspend fun loadConnections(): Result<List<Connection>> = runSuspendCatching {
+        connections.getCurrentUserConnections().getOrThrow()
+        loadCachedConnections().getOrThrow()
+    }
+
+    override suspend fun loadCachedConnections(): Result<List<Connection>> = runSuspendCatching {
+        val uid = auth.currentUser?.uid ?: error("User is not signed in.")
+        database.connectionMemberDao().getActiveMembershipsForUser(uid).mapNotNull { member ->
+            database.connectionDao().getConnectionById(member.connectionId)
+                ?.takeIf { it.status == ConnectionStatus.ACTIVE }
+                ?.let { connection ->
+                    connection.toDomain(
+                        database.connectionMemberDao().getMembersByConnectionId(connection.id)
+                            .map { it.toDomain() }
+                    )
+                }
+        }.sortedWith(
+            compareByDescending<Connection> { it.lastPostAt != null }
+                .thenByDescending { it.lastPostAt ?: Long.MIN_VALUE }
+                .thenByDescending(Connection::createdAt)
+        ).also { check(auth.currentUser?.uid == uid) }
+    }
+    override suspend fun loadConnectedUsers(): Result<List<User>> = connections.loadConnections()
+    override suspend fun loadCachedConnectedUsers(): Result<List<User>> =
+        connections.loadCachedConnectionUsers().map { it.users }
+    override fun observeConnectedUsers() = connections.observeConnections()
+
+    override suspend fun loadCachedMedia(posts: List<Post>): Map<String, List<String?>> =
+        withContext(ioDispatcher) {
+            posts.associate { post ->
+                post.key() to post.mediaItems.sortedBy { it.position }.map { media ->
+                    val file = cachedMediaFile(post.connectionId, post.id, media.mediaId)
+                    file.absolutePath.takeIf { file.exists() && file.length() == media.sizeBytes }
+                }
+            }
+        }
+
+    override suspend fun cachePostMedia(post: Post): Result<Unit> = runSuspendCatching {
+        postSyncMutex.withLock {
+            post.mediaItems.forEach { media ->
+                cacheMedia(
+                    MediaItemEntity(
+                        connectionId = post.connectionId,
+                        postId = post.id,
+                        mediaId = media.mediaId,
+                        mediaType = media.mediaType,
+                        storagePath = media.storagePath,
+                        thumbnailPath = media.thumbnailPath,
+                        mimeType = media.mimeType,
+                        width = media.width,
+                        height = media.height,
+                        durationMs = media.durationMs,
+                        sizeBytes = media.sizeBytes,
+                        position = media.position
+                    )
+                )
+            }
+        }
+    }
+
+    override fun getFilteredPosts(posts: List<Post>, filter: FeedFilter): List<Post> =
+        posts.filter { filter is FeedFilter.All || (filter is FeedFilter.Connection && it.connectionId == filter.connectionId) }
+            .sortedByDescending { it.createdAt ?: it.clientCreatedAt }
+
+    private fun DocumentSnapshot.toPostEntity(connectionId: String) = PostEntity(
+        id = id,
+        connectionId = connectionId,
+        authorId = requireNotNull(getString("authorId")),
+        postType = PostType.valueOf(requireNotNull(getString("postType"))),
+        layoutType = LayoutType.valueOf(requireNotNull(getString("layoutType"))),
+        caption = getString("caption"),
+        clientCreatedAt = requireNotNull(getLong("clientCreatedAt")),
+        createdAt = getTimestamp("createdAt")?.toDate()?.time,
+        updatedAt = getTimestamp("updatedAt")?.toDate()?.time,
+        status = PostStatus.valueOf(requireNotNull(getString("status"))),
+        deletedAt = getTimestamp("deletedAt")?.toDate()?.time,
+        deletedBy = getString("deletedBy"),
+        schemaVersion = (getLong("schemaVersion") ?: 1).toInt(),
+        localSyncStatus = LocalSyncStatus.SYNCED
+    )
+
+    private fun DocumentSnapshot.toUser(): User? {
+        if (!exists()) return null
+        val username = getString("username") ?: return null
+        return User(
+            id = id,
+            username = username,
+            displayName = getString("displayName") ?: username,
+            usernameNormalized = getString("usernameNormalized") ?: normalizeUsername(username),
+            avatarPath = getString("avatarPath"),
+            bio = getString("bio"),
+            createdAt = getTimestamp("createdAt")?.toDate()?.time ?: 0,
+            updatedAt = getTimestamp("updatedAt")?.toDate()?.time ?: 0,
+            schemaVersion = (getLong("schemaVersion") ?: 1).toInt()
+        )
+    }
+
+    private fun DocumentSnapshot.toMediaEntities(connectionId: String): List<MediaItemEntity> =
+        (get("mediaItems") as? List<*>)?.mapNotNull { raw ->
+            val item = raw as? Map<*, *> ?: return@mapNotNull null
+            MediaItemEntity(
+                connectionId = connectionId,
+                postId = id,
+                mediaId = item.requiredString("mediaId"),
+                mediaType = MediaType.valueOf(item.requiredString("mediaType")),
+                storagePath = item.requiredString("storagePath"),
+                thumbnailPath = item["thumbnailPath"] as? String,
+                mimeType = item.requiredString("mimeType"),
+                width = item.requiredLong("width").toInt(),
+                height = item.requiredLong("height").toInt(),
+                durationMs = (item["durationMs"] as? Number)?.toLong(),
+                sizeBytes = item.requiredLong("sizeBytes"),
+                position = item.requiredLong("position").toInt()
+            )
+        }.orEmpty()
+
+    private fun Map<*, *>.requiredString(key: String): String =
+        this[key] as? String ?: error("Post media is missing $key.")
+
+    private fun Map<*, *>.requiredLong(key: String): Long =
+        (this[key] as? Number)?.toLong() ?: error("Post media is missing $key.")
+
+    private fun Any?.asMap(): Map<*, *> = this as? Map<*, *>
+        ?: error("Unexpected response from post service.")
+
+    private fun cachedMediaFile(connectionId: String, postId: String, mediaId: String) = File(
+        context.filesDir,
+        "pending_media/$connectionId/$postId/$mediaId.jpg"
+    )
+
+    private fun Post.key(): String = "$connectionId:$id"
+
+    private companion object {
+        const val POST_PAGE_SIZE = 20L
+        const val DELETED_POST_PAGE_SIZE = 20L
+        const val OFFLINE_MEDIA_CACHE_BYTES = 200L * 1024L * 1024L
+    }
+
+    private data class PageTarget(
+        val connectionId: String?,
+        val cursor: DocumentSnapshot?
+    )
+}

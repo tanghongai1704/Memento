@@ -11,10 +11,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.tangai.memento.feature.auth.presentation.viewmodel.SplashViewModel
-import kotlinx.coroutines.delay
-import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun SplashScreen(
@@ -23,7 +21,6 @@ fun SplashScreen(
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     LaunchedEffect(Unit) {
-        delay(500.milliseconds)
         if (viewModel.shouldNavigateToHome()) {
             onNavigateToHome()
         } else {
