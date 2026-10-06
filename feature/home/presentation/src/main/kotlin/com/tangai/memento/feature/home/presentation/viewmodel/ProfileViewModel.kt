@@ -7,6 +7,8 @@ import com.tangai.memento.feature.auth.domain.AuthRepository
 import com.tangai.memento.feature.auth.domain.model.ProfileValidator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -42,6 +44,7 @@ class ProfileViewModel @Inject constructor(
 ) : ViewModel() {
     private val state = MutableStateFlow(ProfileUiState())
     val uiState = state.asStateFlow()
+    private var successMessageJob: Job? = null
 
     init { loadProfile() }
 
@@ -132,7 +135,8 @@ class ProfileViewModel @Inject constructor(
                 bio = current.bio
             ).fold(
                 onSuccess = {
-                    showUser(it, successMessage = "Profile updated.", inviteCode = current.inviteCode)
+                    showUser(it, inviteCode = current.inviteCode)
+                    showSuccessMessage("Profile updated.")
                 },
                 onFailure = { error ->
                     state.value = state.value.copy(
@@ -166,7 +170,7 @@ class ProfileViewModel @Inject constructor(
         )
     }
 
-    private fun showUser(user: User, successMessage: String? = null, inviteCode: String = state.value.inviteCode) {
+    private fun showUser(user: User, inviteCode: String = state.value.inviteCode) {
         val current = state.value
         state.value = ProfileUiState(
             user = user,
@@ -176,10 +180,20 @@ class ProfileViewModel @Inject constructor(
             displayName = user.displayName,
             username = user.username,
             bio = user.bio.orEmpty(),
-            successMessage = successMessage,
             isLoadingInviteCode = current.isLoadingInviteCode,
             isLoading = false
         )
+    }
+
+    private fun showSuccessMessage(message: String) {
+        successMessageJob?.cancel()
+        state.value = state.value.copy(successMessage = message)
+        successMessageJob = viewModelScope.launch {
+            delay(SUCCESS_MESSAGE_DURATION_MS)
+            if (state.value.successMessage == message) {
+                state.value = state.value.copy(successMessage = null)
+            }
+        }
     }
 
     private fun showSyncedUser(user: User) {
@@ -189,5 +203,13 @@ class ProfileViewModel @Inject constructor(
         } else {
             showUser(user)
         }
+    }
+
+    override fun onCleared() {
+        successMessageJob?.cancel()
+    }
+
+    private companion object {
+        const val SUCCESS_MESSAGE_DURATION_MS = 3_000L
     }
 }

@@ -1,6 +1,8 @@
 package com.tangai.memento.navigation
 
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
@@ -50,6 +52,7 @@ import com.tangai.memento.feature.post.presentation.upload.UploadQueueViewModel
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun MementoNavGraph(
     darkTheme: Boolean,
     onDarkThemeChanged: (Boolean) -> Unit
@@ -59,6 +62,7 @@ fun MementoNavGraph(
     val currentRoute = backStackEntry?.destination?.route
     val uploadQueueViewModel: UploadQueueViewModel = hiltViewModel()
     val uploadItems by uploadQueueViewModel.items.collectAsStateWithLifecycle()
+    val isKeyboardVisible = WindowInsets.isImeVisible
     val selectedHomeConnectionId = if (currentRoute == MementoRoute.Home.route) {
         val homeViewModel: HomeViewModel = hiltViewModel(checkNotNull(backStackEntry))
         val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
@@ -66,7 +70,7 @@ fun MementoNavGraph(
     } else {
         null
     }
-    val showBottomBar = currentRoute in setOf(
+    val showBottomBar = !isKeyboardVisible && currentRoute in setOf(
         MementoRoute.Home.route,
         MementoRoute.Connection.route,
         MementoRoute.Profile.route

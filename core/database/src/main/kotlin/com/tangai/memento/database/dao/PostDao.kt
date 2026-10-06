@@ -10,7 +10,8 @@ abstract class PostDao {
     // Membership guard also prevents a second signed-in account reading the first account's cache.
     @Query("""SELECT p.* FROM posts p JOIN connections c ON c.id = p.connectionId
         JOIN connection_members m ON m.connectionId = c.id AND m.userId = :currentUserId
-        WHERE p.status = 'ACTIVE' AND c.status = 'ACTIVE' AND m.status = 'ACTIVE'
+        WHERE p.status = 'ACTIVE' AND p.localSyncStatus = 'SYNCED'
+        AND c.status = 'ACTIVE' AND m.status = 'ACTIVE'
         AND (:connectionId IS NULL OR p.connectionId = :connectionId)
         AND (:authorFilter = 'ALL' OR (:authorFilter = 'MY' AND p.authorId = :currentUserId)
              OR (:authorFilter = 'RECEIVED' AND p.authorId != :currentUserId))

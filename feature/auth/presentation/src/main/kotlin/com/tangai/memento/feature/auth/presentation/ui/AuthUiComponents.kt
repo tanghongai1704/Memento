@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -52,7 +51,6 @@ internal fun AuthScreenLayout(
                     .fillMaxWidth()
                     .widthIn(max = 480.dp)
                     .verticalScroll(rememberScrollState())
-                    .imePadding()
                     .padding(horizontal = 24.dp, vertical = 24.dp),
                 content = content
             )
