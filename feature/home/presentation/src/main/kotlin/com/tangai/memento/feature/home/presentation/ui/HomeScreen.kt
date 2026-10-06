@@ -107,8 +107,7 @@ fun HomeScreen(
         if (
             newestPostKey != null &&
             previousNewestPostKey != null &&
-            newestPostKey != previousNewestPostKey &&
-            newestPost.authorId == uiState.currentUserId
+            newestPostKey != previousNewestPostKey
         ) {
             postListState.animateScrollToItem(0)
         }
