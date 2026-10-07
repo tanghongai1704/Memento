@@ -115,7 +115,7 @@ Các thay đổi trong repository không tự deploy lên Firebase. Đọc [hư�
 
 ## Submission
 
-Slide PDF và link demo được quản lý tại [submission](submission/README.md). Thư mục này chỉ chứa artifact phục vụ nộp bài, không tham gia vào Android build.
+Slide PDF và thông tin demo được đặt trong folder `submission/`. Folder này chỉ chứa artifact phục vụ nộp bài, không tham gia vào Android build.
 
 ## Phạm vi hiện tại
 
