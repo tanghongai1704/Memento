@@ -61,6 +61,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,7 +96,23 @@ fun HomeScreen(
     var pendingDelete by remember { mutableStateOf<Post?>(null) }
     var showConnectionPicker by remember { mutableStateOf(false) }
     val connectionFilterListState = rememberLazyListState()
+    val postListState = rememberLazyListState()
     val selectedConnectionId = (uiState.selectedFilter as? FeedFilter.Connection)?.connectionId
+    val filteredPosts = viewModel.getFilteredPosts()
+    val newestPost = filteredPosts.firstOrNull()
+    var previousNewestPostKey by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(newestPost?.let(uiState::postKey)) {
+        val newestPostKey = newestPost?.let(uiState::postKey)
+        if (
+            newestPostKey != null &&
+            previousNewestPostKey != null &&
+            newestPostKey != previousNewestPostKey
+        ) {
+            postListState.animateScrollToItem(0)
+        }
+        previousNewestPostKey = newestPostKey
+    }
 
     LaunchedEffect(selectedConnectionId, uiState.suggestedConnections) {
         val selectedIndex = uiState.suggestedConnections
@@ -208,7 +225,7 @@ fun HomeScreen(
                 ) {
                     CircularProgressIndicator()
                 }
-            } else if (uiState.errorMessage != null && viewModel.getFilteredPosts().isEmpty()) {
+            } else if (uiState.errorMessage != null && filteredPosts.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -250,7 +267,7 @@ fun HomeScreen(
                         Button(onClick = viewModel::refresh) { Text("Try again") }
                     }
                 }
-            } else if (viewModel.getFilteredPosts().isEmpty()) {
+            } else if (filteredPosts.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     contentAlignment = Alignment.Center
@@ -295,12 +312,13 @@ fun HomeScreen(
                 }
             } else {
                 LazyColumn(
+                    state = postListState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
                     items(
-                        items = viewModel.getFilteredPosts(),
+                        items = filteredPosts,
                         key = { post -> "${post.connectionId}:${post.id}" }
                     ) { post ->
                         val author = viewModel.getPostAuthor(post)

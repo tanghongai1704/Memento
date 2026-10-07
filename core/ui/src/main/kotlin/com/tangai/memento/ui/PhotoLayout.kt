@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.tangai.memento.domain.model.LayoutType
+import kotlin.math.abs
 
 enum class MissingPhotoState { LOADING, UNAVAILABLE }
 
@@ -194,8 +195,20 @@ private fun CarouselPhotos(
     onRetry: (() -> Unit)?
 ) {
     val listState = rememberLazyListState()
-    val visiblePhoto by remember {
-        derivedStateOf { (listState.firstVisibleItemIndex + 1).coerceAtMost(media.size) }
+    val visiblePhoto by remember(listState, media.size) {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val viewportCenter =
+                (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+            layoutInfo.visibleItemsInfo
+                .minByOrNull { item ->
+                    abs(item.offset + item.size / 2 - viewportCenter)
+                }
+                ?.index
+                ?.plus(1)
+                ?.coerceIn(1, media.size)
+                ?: 1
+        }
     }
     BoxWithConstraints(modifier.fillMaxWidth().height(height)) {
         val itemWidth = maxWidth - 28.dp

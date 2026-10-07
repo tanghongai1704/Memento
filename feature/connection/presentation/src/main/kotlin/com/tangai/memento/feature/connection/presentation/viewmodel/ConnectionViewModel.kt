@@ -7,6 +7,7 @@ import com.tangai.memento.feature.connection.domain.CachedConnectionUsers
 import com.tangai.memento.feature.connection.domain.ConnectionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -22,6 +23,7 @@ class ConnectionViewModel @Inject constructor(
     private val state = MutableStateFlow(ConnectionUiState())
     val uiState = state.asStateFlow()
     private var connectionObservationJob: Job? = null
+    private var successMessageJob: Job? = null
     private val listener = FirebaseAuth.AuthStateListener {
         connectionObservationJob?.cancel()
         state.value = ConnectionUiState()
@@ -76,9 +78,10 @@ class ConnectionViewModel @Inject constructor(
                 state.value = state.value.copy(
                     redeemCode = if (result.isSuccess) "" else code,
                     isRedeemRunning = false,
-                    successMessage = if (result.isSuccess) "Connected successfully." else null,
+                    successMessage = null,
                     errorMessage = result.exceptionOrNull()?.userMessage()
                 )
+                if (result.isSuccess) showSuccessMessage("Connected successfully.")
             }
         }
     }
@@ -111,9 +114,9 @@ class ConnectionViewModel @Inject constructor(
                     if (auth.currentUser?.uid == uid) {
                         repository.loadCachedConnectionUsers().getOrNull()?.let(::showConnections)
                         state.value = state.value.copy(
-                            disconnectingUserId = null,
-                            successMessage = "Disconnected successfully."
+                            disconnectingUserId = null
                         )
+                        showSuccessMessage("Disconnected successfully.")
                     }
                 }
                 .onFailure { error ->
@@ -133,10 +136,27 @@ class ConnectionViewModel @Inject constructor(
             errorMessage = null
         )
     }
+
+    private fun showSuccessMessage(message: String) {
+        successMessageJob?.cancel()
+        state.value = state.value.copy(successMessage = message)
+        successMessageJob = viewModelScope.launch {
+            delay(SUCCESS_MESSAGE_DURATION_MS)
+            if (state.value.successMessage == message) {
+                state.value = state.value.copy(successMessage = null)
+            }
+        }
+    }
+
     override fun onCleared() {
         connectionObservationJob?.cancel()
+        successMessageJob?.cancel()
         auth.removeAuthStateListener(listener)
     }
     private fun Throwable.userMessage(): String = message?.takeIf { it.isNotBlank() }
         ?: "Something went wrong. Please try again."
+
+    private companion object {
+        const val SUCCESS_MESSAGE_DURATION_MS = 3_000L
+    }
 }
