@@ -54,7 +54,7 @@ Scheduled Function `cleanupExpiredMedia` chạy mỗi ngày lúc 03:00 `Asia/Ho_
 
 ## Room
 
-PostDao join posts/connections/membership theo current UID; filter All/connection/My/Received/type/time. Sắp xếp COALESCE(createdAt, clientCreatedAt) DESC. Lọc khoảng thời gian chỉ xét createdAt, như schema thảo luận. Composite PK (connectionId, postId) tránh giả định postId unique toàn cục. Các index posts(connectionId), posts(authorId), posts(createdAt), posts(status,createdAt), posts(connectionId,status,createdAt), connections(status), media_items(postId) có trong entities.
+PostDao join posts/connections/membership theo current UID và chỉ trả post ACTIVE có `localSyncStatus = SYNCED`; draft PENDING/FAILED được đọc bằng query riêng cho upload queue. DAO hỗ trợ filter All/connection/My/Received/type/time và sắp xếp `COALESCE(createdAt, clientCreatedAt) DESC`. Lọc khoảng thời gian chỉ xét `createdAt`. Composite PK `(connectionId, postId)` tránh giả định postId unique toàn cục. Các index `posts(connectionId)`, `posts(authorId)`, `posts(createdAt)`, `posts(status,createdAt)`, `posts(connectionId,status,createdAt)`, `connections(status)` và `media_items(postId)` có trong entities.
 
 ## Chuyển dữ liệu remote cũ
 
@@ -62,6 +62,6 @@ Với dữ liệu legacy, export/backup trước khi dùng Admin migration: chuy
 
 ## Rules và triển khai
 
-`firestore.rules` cho phép profile owner writes và connection/member/Post reads đúng membership ACTIVE. Mã kết nối, lookup, lock, connection/member mutation và Post write vẫn khóa client; Admin SDK trong Functions thực hiện redeem, finalize post, soft delete và disconnect. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình; connection CLOSED hoặc member LEFT không còn quyền đọc/ghi. `firebase.json` quản lý Rules/index/Functions và Emulator, gồm Storage Emulator. Xem [trạng thái hiện tại](mvp-progress.md) và [môi trường Firebase](firebase-environment.md).
+`firestore.rules` cho phép profile owner writes và connection/member/post reads đúng membership ACTIVE. Mã kết nối, lookup, lock, connection/member mutation và post write vẫn khóa client; Admin SDK trong Functions thực hiện redeem, finalize post, soft delete và disconnect. `storage.rules` cho member ACTIVE đọc, giới hạn upload JPEG đúng path ≤ 5 MiB và chỉ uploader được retry object của mình; connection CLOSED hoặc member LEFT không còn quyền đọc/ghi. `firebase.json` quản lý Rules, index, Functions và Emulator, gồm Storage Emulator. Xem [trạng thái hiện tại](project-status.md) và [môi trường Firebase](firebase-environment.md).
 
 Rules không lọc dữ liệu sau query; điều kiện query phải phù hợp quyền đọc. Tham khảo [Firebase query rules](https://firebase.google.com/docs/firestore/security/rules-query) và [transaction](https://firebase.google.com/docs/firestore/manage-data/transactions).

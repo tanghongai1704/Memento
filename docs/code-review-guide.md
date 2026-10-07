@@ -43,7 +43,7 @@ Flow:
 
 1. `SplashScreen` gọi `SplashViewModel.shouldNavigateToHome()`.
 2. ViewModel hỏi `AuthRepository.isUserLoggedIn()`.
-3. Nếu Firebase Auth đang có user thì vào Home, ngược lại vào Login.
+3. Nếu Firebase Auth đang có user thì vào Home và khởi chạy profile sync ở background; ngược lại vào Login.
 
 Đọc theo thứ tự:
 
@@ -51,7 +51,7 @@ Flow:
 - `feature/auth/presentation/.../viewmodel/SplashViewModel.kt` — `shouldNavigateToHome`
 - `feature/auth/data/.../AuthRepositoryImpl.kt` — `isUserLoggedIn`
 
-Lưu ý review: Splash chỉ kiểm tra session Firebase, không đồng bộ profile tại đây. Việc đồng bộ profile được đảm bảo trong login/sign-up.
+Lưu ý review: Splash không chờ network. Với session hợp lệ, ViewModel điều hướng vào Home ngay và gọi `syncCurrentUserProfile()` trong coroutine nền. Login/sign-up vẫn yêu cầu profile setup hoàn tất trước khi báo thành công.
 
 ### Đăng ký
 
@@ -215,13 +215,13 @@ Flow:
 4. Snapshot được parse thành `PostEntity` + `MediaItemEntity`, upsert Room trong transaction.
 5. Ảnh IMAGE được tải từ Storage vào private cache bằng file `.download`, kiểm tra size, rồi rename atomically.
 6. Repository đọc feed từ Room và phát `PostFeedPage`; ViewModel cập nhật `HomeUiState`.
-7. `HomeScreen` render All hoặc một connection qua `FeedFilter`.
+7. `HomeScreen` render All hoặc một connection qua `FeedFilter`. Room chỉ trả post `localSyncStatus = SYNCED`; draft PENDING/FAILED được hiển thị trong upload queue.
 8. Khi load older, feed All dùng một cursor toàn cục; filter connection thêm `connectionId` và dùng cursor riêng, rồi merge kết quả vào Room.
 
 Đọc tại:
 
 - `HomeScreen.kt` — `HomeScreen`, `PostCard`, hành vi scroll/filter/delete
-- `HomeViewModel.kt` — `init`, `loadHomeData`, `onFilterSelected`, `loadOlderPosts`, `getFilteredPosts`
+- `HomeViewModel.kt` — `init`, `loadCachedHomeData`, `onFilterSelected`, `loadOlderPosts`, `getFilteredPosts`
 - `HomeRepositoryImpl.kt` — `observePosts`, `activePostsQuery`, `syncDocumentMetadata`, `cacheMedia`, `loadOlderPosts`, `currentPage`
 - `HomeRepository.kt` — `PostFeedPage`
 - `PostDao.kt` — `loadPosts` và mapper entity/domain
@@ -243,7 +243,7 @@ Flow:
 Đọc tại:
 
 - `HomeViewModel.kt` — `canDelete`, `deletePost`
-- `HomeRepositoryImpl.kt` — `deletePost`, nhánh DELETED trong `syncDocuments`
+- `HomeRepositoryImpl.kt` — `deletePost`, nhánh DELETED trong `syncDocumentMetadata`
 - `functions/src/lifecycleService.ts` — `softDeletePost`
 - `functions/src/cleanupCore.ts`, `cleanupService.ts`
 - `functions/src/index.ts` — scheduled `cleanupExpiredMedia`
@@ -293,4 +293,4 @@ Khi review một flow, lần theo đủ các câu hỏi sau:
 
 Đã có trong code: email/password auth, profile, invite code cố định, DIRECT connection, realtime connection/profile, disconnect, post PHOTO 1–5 ảnh với bốn layout, draft/retry, upload/finalize idempotent, realtime post sync, pagination, download cache, soft delete và scheduled cleanup.
 
-Chưa hoàn thiện hoặc chưa có: GROUP connection/invite, VIDEO, bộ lọc Home nâng cao, avatar upload và các trải nghiệm production sâu hơn như telemetry/quan sát upload nền. Retry nền cơ bản đã chạy bằng WorkManager.
+Chưa hoàn thiện hoặc chưa có: GROUP connection/invite, VIDEO, bộ lọc Home nâng cao, avatar upload và telemetry chi tiết cho upload nền. Retry nền cơ bản đã chạy bằng WorkManager.

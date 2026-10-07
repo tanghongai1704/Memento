@@ -364,10 +364,12 @@ Queue xóa item đã hoàn tất khỏi thanh trạng thái rồi tiếp tục i
 
 ## 13. Đồng bộ post và tải ảnh ở thiết bị nhận
 
-`HomeRepositoryImpl.observePosts()` theo dõi các connection ACTIVE của UID. Với mỗi connection, repository gắn:
+`HomeRepositoryImpl.observePosts()` mở hai collection-group listener theo UID hiện tại:
 
-- listener lấy 20 post mới nhất theo `createdAt`;
-- listener riêng lấy tombstone `DELETED`.
+- listener lấy 20 post ACTIVE mới nhất trên toàn bộ connection theo `createdAt`;
+- listener riêng lấy tối đa 20 tombstone DELETED mới nhất theo `updatedAt`.
+
+Hai query đều dùng `memberIds ARRAY_CONTAINS uid`. Khi người dùng tải thêm ở feed All, repository dùng một cursor toàn cục; khi đang lọc theo connection, query bổ sung `connectionId` và dùng cursor riêng cho connection đó.
 
 Khi nhận post ACTIVE:
 
@@ -376,7 +378,7 @@ Khi nhận post ACTIVE:
 3. Tải IMAGE từ Storage về file `.download` tạm.
 4. Kiểm tra số byte đúng với metadata.
 5. Rename file tạm thành file cache chính thức.
-6. Đọc feed từ Room rồi phát `PostFeedPage` cho ViewModel.
+6. Ghi post remote vào Room với `localSyncStatus = SYNCED`, đọc feed từ Room rồi phát `PostFeedPage` cho ViewModel. Draft PENDING/FAILED tiếp tục nằm trong upload queue và không xuất hiện như bài đã publish.
 
 Cache phía nhận dùng cùng cấu trúc:
 
@@ -384,7 +386,7 @@ Cache phía nhận dùng cùng cấu trúc:
 <app files>/pending_media/{connectionId}/{postId}/{mediaId}.jpg
 ```
 
-Đọc tại `feature/home/data/.../HomeRepositoryImpl.kt` — `observePosts`, `syncDocuments`, `storePost`, `cacheMedia`.
+Đọc tại `feature/home/data/.../HomeRepositoryImpl.kt` — `observePosts`, `syncDocumentMetadata`, `storePost`, `cacheMedia`.
 
 ## 14. Xóa một post đã publish
 
@@ -437,7 +439,7 @@ Thiết bị khác:
 Đọc tại:
 
 - `feature/home/presentation/.../viewmodel/HomeViewModel.kt` — `canDelete`, `deletePost`
-- `feature/home/data/.../HomeRepositoryImpl.kt` — `deletePost`, `syncDocuments`
+- `feature/home/data/.../HomeRepositoryImpl.kt` — `deletePost`, `syncDocumentMetadata`
 - `PostDao.kt` — `markDeleted`, query `getPosts`
 - `functions/src/index.ts` — Callable `softDeletePost`
 - `functions/src/lifecycleService.ts` — `softDeletePost`
