@@ -68,13 +68,38 @@ submission/              Slide PDF và thông tin demo dùng khi nộp bài
 - Firebase CLI để chạy emulator tests.
 - Firebase project đã bật Email/Password Authentication.
 
-## Build ứng dụng
+## Clone và build ứng dụng
 
-```sh
-./gradlew :app:assembleDebug
-```
+1. Clone repository và chuyển vào thư mục project:
 
-APK debug được tạo trong `app/build/outputs/apk/debug/`.
+   ```sh
+   git clone ssh://git@fgit.zapps.vn:8022/aith_fresher/memento.git
+   cd Memento
+   ```
+
+2. Chuẩn bị cấu hình Firebase Android:
+
+   - Trong Firebase Console, mở project `memento-fre` và tải file cấu hình của Android app có package `com.tangai.memento`.
+   - Đặt file đúng tại `app/google-services.json`.
+   - File này được loại khỏi Git; người clone repository phải được chủ project cung cấp file hoặc cấp quyền tải từ Firebase Console.
+
+3. Mở thư mục project bằng Android Studio. IDE sẽ tự tạo `local.properties` theo Android SDK trên máy. Nếu cần tạo thủ công, file chỉ cần khai báo đường dẫn SDK phù hợp, ví dụ trên macOS:
+
+   ```properties
+   sdk.dir=/Users/<username>/Library/Android/sdk
+   ```
+
+   Không copy `local.properties` từ máy khác vì đường dẫn SDK phụ thuộc từng máy.
+
+4. Chờ Gradle Sync hoàn tất, chọn build variant `debug`, sau đó chạy app trên emulator hoặc thiết bị Android. Có thể build từ Terminal tại root project:
+
+   ```sh
+   ./gradlew :app:assembleDebug
+   ```
+
+APK debug được tạo tại `app/build/outputs/apk/debug/app-debug.apk`.
+
+Build và chạy app thông thường không yêu cầu Firebase Admin service account, App Check debug token hoặc Firebase Emulator Suite. Các thông tin này chỉ cần cho tác vụ quản trị, kiểm thử App Check hoặc emulator test tương ứng. Nếu thiết bị từng được cấu hình dùng Firebase Emulator, cần xóa app data hoặc marker `use_firebase_emulators` trước khi demo với Firebase thật.
 
 ## Kiểm tra project
 
